@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AOMSUK - แชทบอท</title>
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+        ::-webkit-scrollbar { display: none; }
+        * { scrollbar-width: none; }
+        .msg-in { animation: msgIn .25s ease-out; }
+        @keyframes msgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+        .dot { width: 7px; height: 7px; border-radius: 9999px; background: #9c8a7e; display: inline-block; animation: bounce 1.2s infinite; }
+        .dot:nth-child(2) { animation-delay: .15s; } .dot:nth-child(3) { animation-delay: .3s; }
+        @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-4px); opacity: 1; } }
+    </style>
+</head>
+<body class="bg-[#d8eafe] h-[100dvh] flex flex-col relative overflow-hidden">
+
+    <!-- Header ด้านบน -->
+    <div class="bg-[#9c8a7e] p-4 flex justify-between items-center shadow-md shrink-0 z-30">
+        <button onclick="toggleMenu()" class="text-white text-2xl focus:outline-none">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+        <h1 class="text-2xl font-bold text-white tracking-widest">AOMSUK</h1>
+        <button id="bellBtn" class="text-yellow-400 text-2xl relative focus:outline-none" aria-label="แจ้งเตือน">
+            <i class="fa-solid fa-bell"></i>
+        </button>
+    </div>
+
+    <!-- Backdrop -->
+    <div id="backdrop" onclick="toggleMenu()" class="fixed inset-0 bg-black/40 z-40 hidden transition-opacity"></div>
+
+    <!-- Sidebar Menu ด้านซ้าย -->
+    <div id="sidebar" class="fixed top-0 left-0 h-full w-64 bg-white z-50 shadow-2xl transform -translate-x-full transition-transform duration-300 ease-in-out flex flex-col pt-16">
+        <nav class="flex-1">
+            <a href="settings.html" class="flex items-center gap-4 px-6 py-5 text-gray-800 font-bold hover:bg-gray-50 border-b border-gray-200">
+                <i class="fa-solid fa-circle-user text-2xl text-black"></i>
+                <span>บัญชีของฉัน</span>
+            </a>
+            <a href="dashboard.html" class="flex items-center gap-4 px-6 py-5 text-gray-800 font-bold hover:bg-gray-50 border-b border-gray-200">
+                <i class="fa-solid fa-paw text-2xl text-black"></i>
+                <span>ติดตาม</span>
+            </a>
+            <a href="add-goal.html" class="flex items-center gap-4 px-6 py-5 text-gray-800 font-bold hover:bg-gray-50 border-b border-gray-200">
+                <i class="fa-solid fa-square-plus text-2xl text-black"></i>
+                <span>เพิ่มเป้าหมาย</span>
+            </a>
+            <a href="chat.html" class="flex items-center gap-4 px-6 py-5 text-gray-800 font-bold bg-gray-100 border-l-4 border-[#9c8a7e] border-b border-gray-200">
+                <i class="fa-solid fa-comment-dots text-2xl text-black"></i>
+                <span>แชทบอท</span>
+            </a>
+            <a href="settings.html" class="flex items-center gap-4 px-6 py-5 text-gray-800 font-bold hover:bg-gray-50 border-b border-gray-200">
+                <i class="fa-solid fa-gear text-2xl text-black"></i>
+                <span>ตั้งค่า</span>
+            </a>
+        </nav>
+    </div>
+
+    <!-- พื้นที่แชท -->
+    <div id="chat" class="flex-1 overflow-y-auto px-4 pt-6 pb-4 space-y-4"></div>
+
+    <!-- Suggested prompts + ช่องพิมพ์ข้อความด้านล่าง -->
+    <div class="shrink-0 w-full px-4 pb-4 pt-1 z-10">
+        <div id="chips" class="flex gap-2 overflow-x-auto pb-2"></div>
+        <form id="chatForm" class="bg-white/90 backdrop-blur-sm rounded-full flex items-center px-4 py-3 shadow-md border border-gray-200">
+            <input id="chatInput" type="text" autocomplete="off" placeholder="พูดคุยกับบอท เพื่อช่วยจัดการตารางออมเงินของคุณ" class="flex-1 bg-transparent focus:outline-none text-xs text-gray-700">
+            <button type="submit" class="text-gray-400 hover:text-[#9c8a7e] ml-2" aria-label="ส่ง"><i class="fa-solid fa-paper-plane"></i></button>
+        </form>
+    </div>
+
+    <script>
+        function toggleMenu() {
+            const sidebar = document.getElementById('sidebar');
+            const backdrop = document.getElementById('backdrop');
+            sidebar.classList.toggle('-translate-x-full');
+            backdrop.classList.toggle('hidden');
+        }
+
+        // ==LOGIC START== ----------------------------------------------------
+        // ส่วนวิเคราะห์ข้อความ (NLP แบบกฎ) + คำนวณตาราง — ไม่ต้องใช้ API ภายนอก
+
+        const DAY_SHORT = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+        const DAY_FULL = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+        const SUN = 'อาทิต[ย์]*(?![ย์])';
+        const DAY_NAMES = 'จันทร์|อังคาร|พุธ|พฤหัส|ศุกร์|ศุกร|เสาร์|เสาร|อาทิต';
+
+        // ---- วันที่ ----
+        const dOnly = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+        const addMonths = (d, n) => {
+            const y = d.getFullYear(), m = d.getMonth() + n;
+            const last = new Date(y, m + 1, 0).getDate();
+            return new Date(y, m, Math.min(d.getDate(), last));
+        };
+        const dkey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const fmtDate = (d, opt) => d.toLocaleDateString('th-TH', opt);
+        const fmtMoney = n => n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const round2 = n => Math.round(n * 100) / 100;
+
+        function dayNameToNum(s) {
+            if (/จันท/.test(s)) return 1; if (/อังคาร/.test(s)) return 2; if (/พุธ/.test(s)) return 3;
+            if (/พฤหัส/.test(s)) return 4; if (/ศุกร/.test(s)) return 5; if (/เสาร/.test(s)) return 6;
+            return 0;
+        }
+
+        // ---- ทำความสะอาดข้อความ ----
+        function normalize(text) {
+            const TH = '๐๑๒๓๔๕๖๗๘๙';
+            let t = text.replace(/[๐-๙]/g, c => TH.indexOf(c)).toLowerCase();
+            t = t.replace(/(\d),(?=\d{3})/g, '$1').replace(/(\d),(?=\d{3})/g, '$1');
+            t = t.replace(/ครึ่ง\s*ปี/g, '6 เดือน').replace(/ครึ่ง\s*เดือน/g, '15 วัน');
+            const W = { 'หนึ่ง': 1, 'สอง': 2, 'สาม': 3, 'สี่': 4, 'ห้า': 5, 'หก': 6, 'เจ็ด': 7, 'แปด': 8, 'เก้า': 9, 'สิบ': 10, 'สิบสอง': 12 };
+            t = t.replace(/(สิบสอง|สิบ|หนึ่ง|สอง|สาม|สี่|ห้า|หก|เจ็ด|แปด|เก้า)\s*(?=(วัน|สัปดาห|อาทิต|เดือน|ปี))/g, w => W[w.trim()] + ' ');
+            return t;
+        }
+
+        // หาชื่อวันในช่วงข้อความ
+        function findDays(w) {
+            const s = new Set(); let today = false;
+            if (/วันหยุด|สุดสัปดาห์|weekend/.test(w)) { s.add(6); s.add(0); }
+            if (/วันธรรมดา|วันทำงาน|weekday|จันทร์\s*(-|–|ถึง)\s*(วัน)?ศุกร์/.test(w)) [1, 2, 3, 4, 5].forEach(d => s.add(d));
+            const P = [[1, /จันทร์|จันท|monday|mon(?![a-z])/], [2, /อังคาร|tuesday|tue(?![a-z])/], [3, /พุธ|wednesday|wed(?![a-z])/],
+                [4, /พฤหัส|thursday|thu(?![a-z])/], [5, /ศุกร์|ศุกร|friday|fri(?![a-z])/], [6, /เสาร์|เสาร|saturday|sat(?![a-z])/]];
+            P.forEach(([d, re]) => { if (re.test(w)) s.add(d); });
+            const sunAfter = `${SUN}(?!\\s*(ละ|หน้า|นี้))`;
+            if (new RegExp(`(วัน|เสาร์|เสาร|และ|,|/|-|–|หรือ|กับ)\\s*${sunAfter}`).test(w) || new RegExp(`^\\s*${sunAfter}`).test(w) || /sunday|sun(?![a-z])/.test(w)) s.add(0);
+            if (/วันนี้|today/.test(w)) today = true;
+            return { s, today };
+        }
+
+        const DELIM_SRC = 'แต่|ขอ|เฉพาะ|แค่|ภายใน|โดย|ให้|ส่วน|ออม|ไม่|เว้น|งด|ข้าม|เริ่ม|ตั้งแต่|มากกว่า|น้อยกว่า|เยอะ|,|\\.|\\n|\\d';
+        function fwd(t, i) { const w = t.slice(i, i + 40); const m = w.search(new RegExp(DELIM_SRC)); return m >= 0 ? w.slice(0, m) : w; }
+        function bwd(t, i) {
+            const w = t.slice(Math.max(0, i - 30), i); let last = -1, mm; const re = new RegExp(DELIM_SRC, 'g');
+            while ((mm = re.exec(w))) last = mm.index + mm[0].length;
+            return last >= 0 ? w.slice(last) : w;
+        }
+
+        function parse(raw) {
+            const r = {};
+            // ชื่อเป้าหมาย เช่น "... เพื่อซื้อ uniqlo t-shirt"
+            const lm = raw.match(/เพื่อ\s*(?:ซื้อ)?\s*/);
+            if (lm) {
+                const rest = raw.slice(lm.index + lm[0].length);
+                const cut = rest.search(/(^|\s|,)(ภายใน|ใน\s*\d|ใน\s*(หนึ่ง|สอง|สาม)|เป็นเวลา|ไม่|เว้น|ยกเว้น|ทุก|ราย|วันละ|สัปดาห์ละ|อาทิตย์ละ|เดือนละ|เริ่ม|ตั้งแต่|เฉพาะ|แต่)/);
+                const label = (cut >= 0 ? rest.slice(0, cut) : rest).trim().slice(0, 40);
+                if (label) { r.label = label; raw = raw.slice(0, lm.index) + ' ' + (cut >= 0 ? rest.slice(cut) : ''); }
+            }
+            let t = normalize(raw);
+
+            // วันเว้นวัน
+            if (/วัน\s*เว้น\s*วัน/.test(t)) { r.everyOther = true; t = t.replace(/วัน\s*เว้น\s*วัน/g, ' '); }
+
+            // ---- ตัวเลข: ยอดเงิน / ระยะเวลา / วันที่ / ยอดต่อครั้ง ----
+            const NUM_RE = /(\d+(?:\.\d+)?)(\s*(k|พัน|หมื่น|แสน|ล้าน))?(\s*(บาท|฿|thb|b(?![a-z])))?/g;
+            const MULT = { k: 1e3, 'พัน': 1e3, 'หมื่น': 1e4, 'แสน': 1e5, 'ล้าน': 1e6 };
+            const timeCands = [], bare = [];
+            let m;
+            while ((m = NUM_RE.exec(t))) {
+                const val = parseFloat(m[1]) * (m[3] ? MULT[m[3]] : 1);
+                const before = t.slice(0, m.index), after = t.slice(m.index + m[0].length);
+                const hasCur = !!m[5] || /฿\s*$/.test(before), hasMult = !!m[3];
+                if (!hasCur && /^\s*(ครั้ง|หน|%|เปอร์)/.test(after)) continue;
+                if (!hasCur && /(เริ่ม|ตั้งแต่)[^,\d]{0,8}วันที่\s*$/.test(before)) { r.start = { type: 'date', day: Math.min(31, Math.max(1, Math.round(val))) }; continue; }
+                if (!hasCur && /วันที่\s*$/.test(before)) { r.monthDay = Math.min(31, Math.max(1, Math.round(val))); if (!r.frequency) r.frequency = 'monthly'; continue; }
+                const per = before.match(/(วัน|สัปดาห[์]?|อาทิต[ย์]*|เดือน|ครั้ง)\s*ละ\s*$/);
+                if (per) {
+                    r.perAmount = val;
+                    if (per[1] !== 'ครั้ง') r.frequency = per[1] === 'วัน' ? 'daily' : per[1] === 'เดือน' ? 'monthly' : 'weekly';
+                    continue;
+                }
+                if (!hasCur && !hasMult) {
+                    const u = after.match(/^\s*(วัน|สัปดาห|อาทิต|เดือน|ปี|days?|weeks?|months?|years?)/);
+                    if (u) {
+                        const unit = /^(วัน|day)/.test(u[1]) ? 'day' : /^(สัปดาห|อาทิต|week)/.test(u[1]) ? 'week' : /^(เดือน|month)/.test(u[1]) ? 'month' : 'year';
+                        timeCands.push({ n: val, unit, pref: /(ภายใน|ใน|เป็นเวลา|ระยะเวลา|นาน|อีก)\s*$/.test(before) });
+                        continue;
+                    }
+                    bare.push(val); continue;
+                }
+                if (r.amount == null) r.amount = val;
+            }
+            if (r.amount == null && bare.length) { r.amount = bare[0]; r.amountBare = true; }
+            if (timeCands.length) {
+                const c = timeCands.find(x => x.pref) || timeCands[0];
+                r.duration = { n: c.n, unit: c.unit };
+            } else if (/สิ้นปี|ปีนี้/.test(t)) r.endMode = 'year';
+            else if (/สิ้นเดือน|เดือนนี้/.test(t)) r.endMode = 'month';
+            else {
+                const one = t.match(/(ภายใน|ใน|เป็นเวลา)\s*(สัปดาห|อาทิต|เดือน|ปี)(?![^\s]*ละ)/);
+                if (one) r.duration = { n: 1, unit: /สัปดาห|อาทิต/.test(one[2]) ? 'week' : one[2] === 'เดือน' ? 'month' : 'year' };
+            }
+
+            // ---- ความถี่ ----
+            if (!r.frequency) {
+                if (/(ราย\s*เดือน|เดือน\s*ละ\s*(1\s*)?(ครั้ง|หน)|ทุก\s*ๆ?\s*เดือน|monthly|every month)/.test(t)) r.frequency = 'monthly';
+                else if (/(ราย\s*(สัปดาห|อาทิต)|(สัปดาห|อาทิต)[ย์]*\s*ละ\s*(1\s*)?(ครั้ง|หน)|ทุก\s*ๆ?\s*(สัปดาห|อาทิต)|weekly|every week)/.test(t)) r.frequency = 'weekly';
+                else if (new RegExp(`(ราย\\s*วัน|ทุก\\s*ๆ?\\s*วัน(?!\\s*(ที่|${DAY_NAMES}))|daily|every day)`).test(t)) r.frequency = 'daily';
+            }
+
+            // ---- วันที่ไม่ออม ----
+            const excluded = new Set();
+            const NEG = /ไม่ต้องออม|ไม่ออม|ไม่เก็บ|ไม่ฝาก|ไม่เอา|ไม่ต้อง|ยกเว้น|เว้น|งดออม|หยุดออม|งด|ข้าม|นอกจาก|except|skip|ไม่/g;
+            while ((m = NEG.exec(t))) {
+                const fw = fwd(t, m.index + m[0].length);
+                let f = findDays(fw);
+                const bwOk = /ไม่ต้องออม|ไม่ออม|ไม่เก็บ|ไม่ฝาก|งดออม|หยุดออม|^งด$/.test(m[0]) || (m[0] === 'ไม่ต้อง' && !fw.trim());
+                if (!f.s.size && !f.today && bwOk) f = findDays(bwd(t, m.index));
+                f.s.forEach(d => excluded.add(d));
+                if (f.today) r.excludeToday = true;
+            }
+
+            // ---- ออมเฉพาะวัน ----
+            const only = new Set();
+            const ONLY_F = /เฉพาะ|แค่|only/g;
+            while ((m = ONLY_F.exec(t))) findDays(fwd(t, m.index + m[0].length)).s.forEach(d => only.add(d));
+            const ONLY_B = /เท่านั้น/g;
+            while ((m = ONLY_B.exec(t))) findDays(bwd(t, m.index)).s.forEach(d => only.add(d));
+            const EVERY = new RegExp(`(ทุก\\s*ๆ?\\s*|ออม\\s*)วัน(?=\\s*(${DAY_NAMES}))`, 'g');
+            while ((m = EVERY.exec(t))) {
+                const pre = t.slice(Math.max(0, m.index - 10), m.index);
+                if (/ไม่|เว้น|งด|ข้าม|เริ่ม|ตั้งแต่/.test(pre)) continue;
+                const end = m.index + m[0].length;
+                if (/^[^,]{0,15}?(มากกว่า|เยอะ|น้อยกว่า|สองเท่า|2\s*เท่า)/.test(t.slice(end, end + 25))) continue;
+                findDays(fwd(t, end)).s.forEach(d => only.add(d));
+            }
+            excluded.forEach(d => only.delete(d));
+            if (excluded.size) r.excluded = [...excluded];
+            if (only.size) r.only = [...only];
+
+            // ---- น้ำหนัก (ออมวันไหนมากกว่า) ----
+            const WEIGHT = new RegExp(`(วันหยุด|สุดสัปดาห์|เสาร์\\s*[-–]?\\s*(และ)?\\s*(วัน)?อาทิต[ย์]*|วันธรรมดา|วันทำงาน|วัน\\s*(${DAY_NAMES})[^\\s]*)\\s*(ออม|เก็บ|ให้|จะ)?\\s*(ได้)?\\s*(มากกว่า|เยอะกว่า|เยอะ|มาก|เพิ่ม|สองเท่า|2\\s*เท่า|น้อยกว่า|น้อย)`, 'g');
+            const weights = {};
+            while ((m = WEIGHT.exec(t))) {
+                const factor = /น้อย/.test(m[7]) ? 0.5 : 2;
+                findDays(m[1]).s.forEach(d => { weights[d] = factor; });
+            }
+            if (Object.keys(weights).length) r.weights = weights;
+
+            // ---- รูปแบบการกระจายยอด ----
+            if (/ไม่(ต้อง)?\s*เท่า/.test(t) || /สุ่ม|random/.test(t)) r.style = 'random';
+            else if (/เท่า\s*ๆ?\s*กัน|คงที่|ยอดเดียวกัน|equal/.test(t)) r.style = 'equal';
+            else if (/เพิ่มขึ้นเรื่อย|ค่อย\s*ๆ?\s*เพิ่ม|ขั้นบันได|น้อยไปมาก|increas/.test(t)) r.style = 'increasing';
+            else if (/ลดลงเรื่อย|ค่อย\s*ๆ?\s*ลด|มากไปน้อย|decreas/.test(t)) r.style = 'decreasing';
+
+            // ---- วันเริ่ม ----
+            if (!r.start) {
+                if (/(เริ่ม|ตั้งแต่)[^,\d]{0,10}พรุ่งนี้/.test(t)) r.start = { type: 'tomorrow' };
+                else if (/(เริ่ม|ตั้งแต่)[^,\d]{0,10}(สัปดาห์หน้า|อาทิตย์หน้า)/.test(t)) r.start = { type: 'nextweek' };
+                else if (/(เริ่ม|ตั้งแต่)[^,\d]{0,10}เดือนหน้า/.test(t)) r.start = { type: 'nextmonth' };
+                else {
+                    const sw = t.match(new RegExp(`(เริ่ม|ตั้งแต่)\\s*(ออม)?\\s*(ต้น)?\\s*วัน\\s*(${DAY_NAMES})`));
+                    if (sw) r.start = { type: 'weekday', day: dayNameToNum(sw[4]) };
+                }
+            }
+            return r;
+        }
+
+        function hasInfo(p) {
+            return ['amount', 'perAmount', 'duration', 'endMode', 'frequency', 'excluded', 'only', 'excludeToday', 'weights', 'style', 'start', 'monthDay', 'everyOther'].some(k => p[k] != null);
+        }
+
+        function mergeReq(base, p) {
+            const r = { ...base };
+            if (p.amount != null) { r.amount = p.amount; r.amountBare = p.amountBare; if (p.perAmount == null) delete r.perAmount; }
+            if (p.perAmount != null) { r.perAmount = p.perAmount; if (p.amount == null) delete r.amount; }
+            if (p.duration) { r.duration = p.duration; delete r.endMode; }
+            if (p.endMode) { r.endMode = p.endMode; delete r.duration; }
+            ['frequency', 'monthDay', 'style', 'start', 'everyOther', 'excludeToday', 'label'].forEach(k => { if (p[k] != null) r[k] = p[k]; });
+            if (p.excluded) r.excluded = [...new Set([...(base.excluded || []), ...p.excluded])];
+            if (p.only) r.only = p.only;
+            if (r.only && r.excluded) r.only = r.only.filter(d => !r.excluded.includes(d));
+            if (p.weights) r.weights = { ...(base.weights || {}), ...p.weights };
+            return r;
+        }
+
+        function computeStart(s, today) {
+            if (!s) return today;
+            if (s.type === 'tomorrow') return addDays(today, 1);
+            if (s.type === 'nextweek') return addDays(today, 7 - ((today.getDay() + 6) % 7));
+            if (s.type === 'nextmonth') return new Date(today.getFullYear(), today.getMonth() + 1, 1);
+            if (s.type === 'weekday') return addDays(today, (s.day - today.getDay() + 7) % 7);
+            if (s.type === 'date') {
+                let d = new Date(today.getFullYear(), today.getMonth(), s.day);
+                if (d < today) d = new Date(today.getFullYear(), today.getMonth() + 1, s.day);
+                return d;
+            }
+            return today;
+        }
+
+        function mulberry32(a) {
+            return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+        }
+
+        // ---- สร้างแผนการออม ----
+        function buildPlan(req, seed, todayOverride) {
+            const today = dOnly(todayOverride || new Date());
+            const start = computeStart(req.start, today);
+            let end, unbounded = false;
+            if (req.duration) {
+                const { n, unit } = req.duration;
+                if (!(n > 0)) return { error: 'ระยะเวลาต้องมากกว่า 0 นะ ลองบอกใหม่อีกครั้ง เช่น "1 เดือน" หรือ "2 สัปดาห์"' };
+                if (unit === 'day') end = addDays(start, Math.max(1, Math.round(n)) - 1);
+                else if (unit === 'week') end = addDays(start, Math.max(1, Math.round(n * 7)) - 1);
+                else if (unit === 'month') end = Number.isInteger(n) ? addDays(addMonths(start, n), -1) : addDays(start, Math.round(n * 30) - 1);
+                else end = addDays(addMonths(start, Math.round(n * 12)), -1);
+            } else if (req.endMode === 'month') end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+            else if (req.endMode === 'year') end = new Date(start.getFullYear(), 11, 31);
+            else if (req.perAmount && req.amount) { unbounded = true; end = addDays(start, 3650); }
+            else return { error: 'ยังไม่รู้ระยะเวลาเลย' };
+
+            if (!unbounded && (end - start) / 864e5 > 3660) return { error: 'ระยะเวลานานเกิน 10 ปีแล้ว 😅 ลองตั้งเป้าหมายให้สั้นลงหน่อย จะได้มีกำลังใจออมมากขึ้นนะ' };
+
+            const total0 = req.amount;
+            if (!req.perAmount && !(total0 > 0)) return { error: 'ยอดเงินต้องมากกว่า 0 บาทนะ' };
+            if ((total0 || 0) > 10000000 || (req.perAmount || 0) > 10000000) return { error: 'ยอดเงินสูงเกินไปสำหรับตารางออมรายวัน ลองลดเป้าหมายลงหรือแบ่งเป็นหลายเป้าหมายดูนะ' };
+            if (req.perAmount != null && !(req.perAmount > 0)) return { error: 'ยอดต่อครั้งต้องมากกว่า 0 บาทนะ' };
+
+            // วันที่ผ่านเงื่อนไข
+            const exc = new Set(req.excluded || []), only = new Set(req.only || []);
+            let cand = [];
+            for (let d = start; d <= end; d = addDays(d, 1)) {
+                const wd = d.getDay();
+                if (exc.has(wd)) continue;
+                if (only.size && !only.has(wd)) continue;
+                if (req.excludeToday && +d === +today) continue;
+                if (req.everyOther && Math.round((d - start) / 864e5) % 2 === 1) continue;
+                cand.push(d);
+            }
+
+            // ความถี่
+            const freq = req.frequency || 'daily';
+            if (freq === 'weekly') {
+                const groups = new Map();
+                cand.forEach(d => { const k = dkey(addDays(d, -((d.getDay() + 6) % 7))); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(d); });
+                const pref = only.size === 1 ? [...only][0] : null;
+                cand = [...groups.values()].map(g => g.find(d => d.getDay() === pref) || g[0]);
+            } else if (freq === 'monthly') {
+                const groups = new Map();
+                cand.forEach(d => { const k = d.getFullYear() * 12 + d.getMonth(); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(d); });
+                const target = req.monthDay || start.getDate();
+                cand = [];
+                groups.forEach(g => {
+                    const dim = new Date(g[0].getFullYear(), g[0].getMonth() + 1, 0).getDate();
+                    const pick = g.find(d => d.getDate() >= Math.min(target, dim));
+                    if (pick) cand.push(pick);
+                });
+            }
+
+            let amounts;
+            if (unbounded) {
+                const count = Math.ceil(total0 / req.perAmount - 1e-9);
+                if (cand.length < count) return { error: 'ด้วยยอดต่อครั้งนี้ต้องใช้เวลานานเกิน 10 ปี ลองเพิ่มยอดต่อครั้งดูนะ' };
+                cand = cand.slice(0, count);
+            }
+            if (!cand.length) {
+                return { error: 'อุ๊ย! ตามเงื่อนไขนี้ไม่เหลือวันให้ออมเลย 😅 ลองขยายระยะเวลา เลื่อนวันเริ่ม หรือลดวันที่ยกเว้นลงหน่อยนะ', noDays: true };
+            }
+
+            const n = cand.length;
+            if (req.perAmount) {
+                amounts = cand.map(() => req.perAmount);
+                if (unbounded) amounts[n - 1] = round2(total0 - req.perAmount * (n - 1));
+            } else {
+                const avg = total0 / n;
+                const unit = (avg >= 1 && Number.isInteger(total0)) ? 1 : 0.01;
+                const U = Math.round(total0 / unit);
+                if (U < n) return { error: `ยอด ${fmtMoney(total0)} บาท น้อยเกินไปสำหรับ ${n} ครั้ง ลองเพิ่มยอดหรือลดจำนวนวันดูนะ` };
+                const rng = mulberry32(seed || 1);
+                const style = req.style || 'random';
+                const w = cand.map((d, i) => {
+                    let x = (req.weights && req.weights[d.getDay()]) || 1;
+                    if (style === 'random') x *= 0.5 + rng();
+                    if (style === 'increasing') x *= 1 + 2 * i / Math.max(1, n - 1);
+                    if (style === 'decreasing') x *= 3 - 2 * i / Math.max(1, n - 1);
+                    return x;
+                });
+                const W = w.reduce((a, b) => a + b, 0), R = U - n;
+                const shares = w.map(x => x / W * R);
+                const alloc = shares.map(s => 1 + Math.floor(s));
+                let rem = U - alloc.reduce((a, b) => a + b, 0);
+                shares.map((s, i) => [s - Math.floor(s), i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (rem > 0) { alloc[i]++; rem--; } });
+                amounts = alloc.map(a => round2(a * unit));
+            }
+
+            const items = cand.map((d, i) => ({ date: d, amount: amounts[i] }));
+            const total = round2(amounts.reduce((a, b) => a + b, 0));
+            const warnings = [];
+            const avgPer = total / n;
+            if (freq === 'daily' && avgPer > 3000) warnings.push(`ยอดเฉลี่ยต่อวันค่อนข้างสูง (${fmtMoney(avgPer)} ฿) ถ้ารู้สึกหนักไป ลองขยายระยะเวลาดูนะ`);
+            if (n === 1 && freq !== 'daily') warnings.push('ช่วงเวลานี้มีวันออมแค่ครั้งเดียว ลองขยายระยะเวลาถ้าอยากแบ่งเป็นหลายงวด');
+            return {
+                req, seed, start, end: unbounded ? cand[n - 1] : end, items, total, freq, warnings,
+                viewMonth: new Date(cand[0].getFullYear(), cand[0].getMonth(), 1)
+            };
+        }
+        // ==LOGIC END== ------------------------------------------------------
+
+        // ---------------------------------------------------------------------
+        // ส่วนแสดงผลแชท
+        const $chat = document.getElementById('chat');
+        const $chips = document.getElementById('chips');
+        const $form = document.getElementById('chatForm');
+        const $input = document.getElementById('chatInput');
+        const plans = {};
+        let context = null;     // เงื่อนไขล่าสุด ใช้เติมข้อมูล / แก้ไขต่อ
+        let awaiting = null;    // 'amount' | 'duration'
+        let busy = false;
+
+        const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const scrollDown = () => requestAnimationFrame(() => $chat.scrollTo({ top: $chat.scrollHeight, behavior: 'smooth' }));
+        const AVATAR = '<div class="w-8 h-8 bg-[#9c8a7e] rounded-full mt-1 shrink-0 flex items-center justify-center text-white text-xs"><i class="fa-solid fa-piggy-bank"></i></div>';
+
+        const EXAMPLES = [
+            'ออม 500 บาท ภายใน 1 เดือน ไม่ออมทุกวันอังคาร',
+            'ออมรายสัปดาห์ 3,000 บาท ใน 3 เดือน',
+            'เดือนละ 1,000 บาท เป็นเวลา 6 เดือน',
+            'ออม 2,000 บาท ใน 1 เดือน วันหยุดออมมากกว่าวันธรรมดา',
+            'วันละ 20 บาท จนครบ 1,000 บาท'
+        ];
+
+        function setChips(list) {
+            $chips.innerHTML = (list || []).map(c => `<button type="button" data-chip="${esc(c)}" class="shrink-0 bg-white/80 hover:bg-white text-[#7a6a5f] text-xs px-3 py-1.5 rounded-full border border-[#d9cfc7] shadow-sm whitespace-nowrap">${esc(c)}</button>`).join('');
+        }
+
+        function addUser(text) {
+            const row = document.createElement('div');
+            row.className = 'flex justify-end msg-in';
+            row.innerHTML = `<div class="bg-[#a3948b] text-white p-4 rounded-3xl rounded-tr-none max-w-[80%] shadow-sm text-sm break-words">${esc(text)}</div>`;
+            $chat.append(row); scrollDown();
+        }
+
+        function addBot(html, { wide = false, id = '' } = {}) {
+            const row = document.createElement('div');
+            row.className = 'flex gap-2 items-start msg-in';
+            row.innerHTML = `${AVATAR}<div ${id ? `id="${id}"` : ''} class="bg-[#fcefdc] text-gray-800 p-4 rounded-3xl rounded-tl-none ${wide ? 'w-[85%] max-w-sm' : 'max-w-[80%]'} shadow-sm text-sm space-y-3">${html}</div>`;
+            $chat.append(row); scrollDown();
+            return row;
+        }
+
+        function botReply(fn) {
+            busy = true;
+            const typing = document.createElement('div');
+            typing.className = 'flex gap-2 items-start msg-in';
+            typing.innerHTML = `${AVATAR}<div class="bg-[#fcefdc] px-4 py-3 rounded-3xl rounded-tl-none shadow-sm flex gap-1"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>`;
+            $chat.append(typing); scrollDown();
+            setTimeout(() => { typing.remove(); fn(); busy = false; }, 550 + Math.random() * 400);
+        }
+
+        // ---- การ์ดตารางการออม ----
+        const compact = n => n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : (Number.isInteger(n) ? String(n) : n.toFixed(n < 10 ? 2 : 1));
+        const FREQ_LABEL = { daily: 'รายวัน', weekly: 'รายสัปดาห์', monthly: 'รายเดือน' };
+        const STYLE_LABEL = { random: 'สุ่มยอดรายวัน', equal: 'ยอดเท่าๆ กัน', increasing: 'ยอดเพิ่มขึ้นเรื่อยๆ', decreasing: 'ยอดลดลงเรื่อยๆ' };
+        const sameMonth = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+
+        function badges(p) {
+            const r = p.req, b = [];
+            b.push(`<i class="fa-regular fa-clock"></i> ${fmtDate(p.start, { day: 'numeric', month: 'short' })} – ${fmtDate(p.end, { day: 'numeric', month: 'short', year: '2-digit' })}`);
+            b.push(`<i class="fa-solid fa-repeat"></i> ${FREQ_LABEL[p.freq]}${p.freq === 'monthly' && r.monthDay ? ` (วันที่ ${r.monthDay})` : ''}`);
+            if (r.everyOther) b.push('วันเว้นวัน');
+            if (r.excluded && r.excluded.length) b.push(`<i class="fa-solid fa-ban"></i> ไม่ออมวัน${r.excluded.map(d => DAY_FULL[d]).join(', ')}`);
+            if (r.only && r.only.length) b.push(`เฉพาะวัน${r.only.map(d => DAY_FULL[d]).join(', ')}`);
+            if (r.excludeToday) b.push('ไม่ออมวันนี้');
+            if (r.weights) Object.entries(r.weights).forEach(([d, f]) => b.push(`วัน${DAY_FULL[d]}ออม${f > 1 ? 'มากขึ้น' : 'น้อยลง'}`));
+            if (r.perAmount) b.push(`ครั้งละ ${fmtMoney(r.perAmount)} ฿`);
+            else b.push(STYLE_LABEL[r.style || 'random']);
+            return b.map(x => `<span class="inline-flex items-center gap-1 bg-white/70 border border-[#e6d8c6] text-[11px] text-[#7a6a5f] px-2 py-0.5 rounded-full">${x}</span>`).join('');
+        }
+
+        function calendarHTML(p) {
+            const vm = p.viewMonth, y = vm.getFullYear(), mo = vm.getMonth();
+            const dim = new Date(y, mo + 1, 0).getDate(), lead = new Date(y, mo, 1).getDay();
+            const map = {}; p.items.forEach(it => { map[dkey(it.date)] = it.amount; });
+            const today = dOnly(new Date());
+            const first = p.items[0].date, last = p.items[p.items.length - 1].date;
+            const canPrev = !sameMonth(vm, first) && vm > first, canNext = !sameMonth(vm, last) && vm < last;
+            let cells = '';
+            for (let i = 0; i < lead; i++) cells += '<div></div>';
+            for (let day = 1; day <= dim; day++) {
+                const d = new Date(y, mo, day), amt = map[dkey(d)];
+                const inRange = d >= p.start && d <= p.end;
+                const isToday = +d === +today ? ' ring-2 ring-yellow-400' : '';
+                const cls = amt != null ? 'bg-[#9c8a7e] text-white' : inRange ? 'text-gray-400 bg-gray-100' : 'text-gray-300';
+                cells += `<div class="h-9 rounded-md flex flex-col items-center justify-center ${cls}${isToday}">
+                    <span class="text-[11px] font-semibold leading-none">${day}</span>
+                    ${amt != null ? `<span class="text-[8px] leading-none mt-0.5">${compact(amt)}</span>` : ''}
+                </div>`;
+            }
+            return `<div class="bg-white border-2 border-black rounded-xl p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <button data-act="prev" data-id="${p.id}" class="w-7 h-7 rounded-full ${canPrev ? 'hover:bg-gray-100 text-black' : 'text-gray-200 cursor-default'}" ${canPrev ? '' : 'disabled'}><i class="fa-solid fa-chevron-left text-xs"></i></button>
+                    <div class="flex items-center gap-2 font-semibold text-sm"><i class="fa-regular fa-calendar-days text-lg"></i>${fmtDate(vm, { month: 'long', year: 'numeric' })}</div>
+                    <button data-act="next" data-id="${p.id}" class="w-7 h-7 rounded-full ${canNext ? 'hover:bg-gray-100 text-black' : 'text-gray-200 cursor-default'}" ${canNext ? '' : 'disabled'}><i class="fa-solid fa-chevron-right text-xs"></i></button>
+                </div>
+                <div class="grid grid-cols-7 gap-1 text-center text-[10px] text-gray-500 mb-1">${DAY_SHORT.map(d => `<div>${d}</div>`).join('')}</div>
+                <div class="grid grid-cols-7 gap-1 text-center">${cells}</div>
+            </div>`;
+        }
+
+        function cardHTML(p) {
+            const n = p.items.length, shown = p.expanded ? p.items : p.items.slice(0, 6);
+            const rows = shown.map((it, i) => `<div class="flex justify-between ${i < shown.length - 1 ? 'border-b border-gray-200/80 pb-1' : ''}">
+                    <span>${fmtDate(it.date, { weekday: 'short', day: 'numeric', month: 'short' })}</span><span class="font-bold">${fmtMoney(it.amount)} ฿</span></div>`).join('');
+            const canReroll = !p.req.perAmount && (p.req.style || 'random') === 'random';
+            return `
+                <p class="font-semibold text-[#9c8a7e]">${esc(p.headline)}</p>
+                ${calendarHTML(p)}
+                <div class="grid grid-cols-3 gap-2 text-center">
+                    <div class="bg-white/70 rounded-xl py-2"><div class="text-[10px] text-gray-500">เป้าหมาย</div><div class="font-bold text-sm">${fmtMoney(p.total)}฿</div></div>
+                    <div class="bg-white/70 rounded-xl py-2"><div class="text-[10px] text-gray-500">จำนวนครั้ง</div><div class="font-bold text-sm">${n} ครั้ง</div></div>
+                    <div class="bg-white/70 rounded-xl py-2"><div class="text-[10px] text-gray-500">เฉลี่ย/ครั้ง</div><div class="font-bold text-sm">${fmtMoney(p.total / n)}฿</div></div>
+                </div>
+                <div class="flex flex-wrap gap-1">${badges(p)}</div>
+                ${p.warnings.map(w => `<div class="text-[11px] bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-2 py-1.5"><i class="fa-solid fa-triangle-exclamation mr-1"></i>${esc(w)}</div>`).join('')}
+                <div class="space-y-2 text-sm bg-white/50 p-2 rounded-xl">
+                    ${rows}
+                    ${n > 6 ? `<button data-act="toggle" data-id="${p.id}" class="w-full text-center text-xs text-[#9c8a7e] font-semibold pt-1">${p.expanded ? 'ย่อรายการ <i class="fa-solid fa-chevron-up"></i>' : `ดูทั้งหมด (${n} รายการ) <i class="fa-solid fa-chevron-down"></i>`}</button>` : ''}
+                    <div class="flex justify-between border-t-2 border-dashed border-gray-300 pt-1 font-semibold text-[#7a6a5f]"><span>รวม</span><span>${fmtMoney(p.total)} ฿</span></div>
+                </div>
+                <div class="flex gap-2">
+                    ${p.saved
+                        ? `<a href="dashboard.html" class="flex-1 text-center bg-green-600 text-white rounded-full py-2 text-xs font-semibold"><i class="fa-solid fa-check mr-1"></i>บันทึกแล้ว · ไปหน้าติดตาม</a>`
+                        : `<button data-act="save" data-id="${p.id}" class="flex-1 bg-[#9c8a7e] hover:bg-[#8a7a6f] text-white rounded-full py-2 text-xs font-semibold"><i class="fa-solid fa-floppy-disk mr-1"></i>บันทึกเป้าหมาย</button>`}
+                    ${canReroll && !p.saved ? `<button data-act="reroll" data-id="${p.id}" class="bg-white border border-[#9c8a7e] text-[#9c8a7e] rounded-full px-3 py-2 text-xs font-semibold"><i class="fa-solid fa-shuffle mr-1"></i>สุ่มใหม่</button>` : ''}
+                </div>`;
+        }
+
+        function renderCard(p) { const el = document.getElementById(`card-${p.id}`); if (el) el.innerHTML = cardHTML(p); }
+
+        // บันทึกแผนลง Firestore (users/{uid}/goals/{id})
+        async function savePlan(p) {
+            const goal = {
+                id: p.id,
+                title: p.req.label ? `${p.req.label}` : `ออม ${fmtMoney(p.total)} บาท`,
+                target: p.total,
+                frequency: p.freq,
+                startDate: dkey(p.start),
+                endDate: dkey(p.end),
+                conditions: { excludedDays: p.req.excluded || [], onlyDays: p.req.only || [], weights: p.req.weights || {}, style: p.req.perAmount ? 'fixed' : (p.req.style || 'random') },
+                schedule: p.items.map(it => ({ date: dkey(it.date), amount: it.amount, saved: false })),
+                savedAmount: 0,
+                createdAt: new Date().toISOString()
+            };
+            await AOMSUK.saveGoal(goal);
+            AOMSUK.notify(`plan_${goal.id}`, {
+                type: 'plan', title: 'สร้างแผนการออมแล้ว 📅',
+                body: `"${goal.title}" ออม ${fmtMoney(goal.target)} ฿ ทั้งหมด ${goal.schedule.length} ครั้ง เริ่ม ${fmtDate(p.start, { day: 'numeric', month: 'short' })}`,
+                link: 'dashboard.html'
+            }).catch(() => { });
+        }
+
+        // ---- สมองของบอท ----
+        const HELP_HTML = `<p class="font-semibold text-[#9c8a7e]">บอกฉันได้แบบนี้เลย 👇</p>
+            <ul class="list-disc pl-5 space-y-1 text-[13px]">
+                <li><b>ยอดเงิน</b>: 500 บาท, 2 พัน, 1 หมื่น</li>
+                <li><b>ระยะเวลา</b>: 2 สัปดาห์, 3 เดือน, 1 ปี, ภายในสิ้นเดือน</li>
+                <li><b>ความถี่</b>: ทุกวัน / รายสัปดาห์ / รายเดือน / ทุกวันที่ 25 / วันเว้นวัน</li>
+                <li><b>ยอดต่อครั้ง</b>: วันละ 20 บาท, สัปดาห์ละ 300, เดือนละ 1,000</li>
+                <li><b>เว้นวัน</b>: ไม่ออมวันอังคาร, ไม่ออมวันหยุด</li>
+                <li><b>เฉพาะวัน</b>: ออมทุกวันจันทร์และศุกร์, เฉพาะวันธรรมดา</li>
+                <li><b>น้ำหนัก</b>: วันหยุดออมมากกว่าวันธรรมดา</li>
+                <li><b>รูปแบบยอด</b>: ยอดเท่ากัน / สุ่ม / เพิ่มขึ้นเรื่อยๆ</li>
+                <li><b>วันเริ่ม</b>: เริ่มพรุ่งนี้, เริ่มสัปดาห์หน้า, เริ่มเดือนหน้า</li>
+            </ul>
+            <p class="text-[12px] text-gray-600">พอได้ตารางแล้ว พิมพ์แก้ต่อได้เลย เช่น "เปลี่ยนเป็น 1,000 บาท" หรือ "ไม่ออมวันเสาร์ด้วย" · พิมพ์ "เริ่มใหม่" เพื่อล้างเงื่อนไข</p>`;
+
+        function describeHeadline(p) {
+            const n = p.items.length, r = p.req;
+            if (r.label) return `ได้เลย! ตารางออมเพื่อ "${r.label}" มาแล้ว 🎯`;
+            if (r.perAmount && r.amount && !r.duration && !r.endMode) return `ได้เลย! ออมครั้งละ ${fmtMoney(r.perAmount)} ฿ อีก ${n} ครั้งก็ถึงเป้าแล้ว 💪`;
+            if (r.excluded && r.excluded.length) return `ได้เลย! นี่คือตารางการออมของคุณ (เว้นวัน${r.excluded.map(d => DAY_FULL[d]).join(', ')}ให้แล้ว)`;
+            return 'ได้เลย! นี่คือตารางการออมของคุณ';
+        }
+
+        function respond(text) {
+            const t = normalize(text).trim();
+            const noNum = !/\d/.test(t);
+
+            if (/^(เริ่มใหม่|ล้าง|รีเซ็ต|reset|clear)/.test(t)) {
+                context = null; awaiting = null;
+                addBot('ล้างเงื่อนไขเรียบร้อย ✨ เริ่มตั้งเป้าหมายใหม่กันเลย บอกยอดเงินและระยะเวลามาได้เลยนะ');
+                return setChips(EXAMPLES);
+            }
+            if (noNum && /^(help|ช่วย|วิธีใช้|ใช้ยังไง|ทำอะไรได้|สั่งอะไรได้)/.test(t)) { addBot(HELP_HTML); return setChips(EXAMPLES); }
+            if (noNum && /(เป้าหมายของฉัน|ดูเป้าหมาย|เป้าหมายที่บันทึก)/.test(t)) {
+                const goals = AOMSUK.goals;
+                addBot(goals.length
+                    ? `ตอนนี้คุณมีเป้าหมายที่บันทึกไว้ ${goals.length} รายการ:<br>${goals.slice(-5).map(g => `• ${esc(g.title)} (${esc(g.startDate)} ถึง ${esc(g.endDate)})`).join('<br>')}<br><a href="dashboard.html" class="text-[#9c8a7e] font-semibold underline">ไปหน้าติดตาม</a>`
+                    : 'ยังไม่มีเป้าหมายที่บันทึกไว้เลย มาสร้างอันแรกกัน! 🐷');
+                return setChips(EXAMPLES);
+            }
+            const p = parse(text);
+            if (!hasInfo(p)) {
+                if (/^(สวัสดี|หวัดดี|ดีจ้า|ดีครับ|ดีค่ะ|hello|hi|hey)/.test(t)) { addBot('สวัสดี! 👋 วันนี้อยากออมเงินเพื่ออะไรดี? บอกยอดเงินกับระยะเวลามาได้เลย เดี๋ยวฉันจัดตารางให้'); return setChips(EXAMPLES); }
+                if (/ขอบคุณ|ขอบใจ|thank|thx/.test(t)) { addBot('ยินดีเสมอ! 💛 ออมได้ทีละนิด เดี๋ยวก็ถึงเป้าแน่นอน สู้ๆ นะ'); return; }
+                addBot('ขอโทษนะ ฉันยังไม่ค่อยเข้าใจ 🙏 ลองบอกยอดเงิน ระยะเวลา และเงื่อนไขการออม เช่น <b>"ออม 500 บาท ใน 1 เดือน ไม่ออมวันอังคาร"</b> หรือพิมพ์ <b>"ช่วย"</b> เพื่อดูวิธีใช้');
+                return setChips(EXAMPLES);
+            }
+
+            // ตอบตัวเลขลอยๆ ตอนถามระยะเวลา
+            if (awaiting === 'duration' && p.amountBare && !p.duration && !p.endMode && Object.keys(p).length <= 2) {
+                const n = p.amount;
+                addBot(`${n} อะไรดี วัน สัปดาห์ หรือเดือน? 🤔`);
+                return setChips([`${n} วัน`, `${n} สัปดาห์`, `${n} เดือน`]);
+            }
+
+            const complete = (p.amount != null || p.perAmount != null) && (p.duration || p.endMode || (p.perAmount && p.amount));
+            let req = (complete || !context) ? p : mergeReq(context, p);
+            context = req;
+
+            if (req.amount == null && req.perAmount == null) {
+                awaiting = 'amount';
+                addBot('อยากออมทั้งหมดเท่าไหร่ดี? 💰 (เช่น 500 บาท หรือ วันละ 20 บาท)');
+                return setChips(['500 บาท', '1,000 บาท', '5,000 บาท', 'วันละ 20 บาท']);
+            }
+            if (!req.duration && !req.endMode && !(req.perAmount && req.amount)) {
+                awaiting = 'duration';
+                addBot(req.perAmount
+                    ? `ออมครั้งละ ${fmtMoney(req.perAmount)} บาท นานแค่ไหนดี? หรือจะบอกเป้าหมายรวมก็ได้นะ (เช่น "จนครบ 1,000 บาท")`
+                    : `ออม ${fmtMoney(req.amount)} บาท ให้ครบภายในกี่วัน/สัปดาห์/เดือนดี? ⏳`);
+                return setChips(['2 สัปดาห์', '1 เดือน', '3 เดือน', 'ภายในสิ้นเดือนนี้']);
+            }
+            awaiting = null;
+
+            const seed = Math.floor(Math.random() * 1e9);
+            const plan = buildPlan(req, seed);
+            if (plan.error) {
+                addBot(`<p>${esc(plan.error)}</p>`);
+                return setChips(plan.noDays ? ['เริ่มพรุ่งนี้', 'ขยายเป็น 1 สัปดาห์', 'เริ่มใหม่'] : ['เริ่มใหม่', 'ช่วย']);
+            }
+            plan.id = 'p' + Date.now().toString(36);
+            plan.headline = describeHeadline(plan);
+            plans[plan.id] = plan;
+            addBot(cardHTML(plan), { wide: true, id: `card-${plan.id}` });
+            setChips(['ขอยอดเท่ากันทุกครั้ง', 'เปลี่ยนเป็นรายสัปดาห์', 'ไม่ออมวันหยุด', 'วันหยุดออมมากกว่า', 'เริ่มใหม่']);
+        }
+
+        function send(text) {
+            text = (text || '').trim();
+            if (!text || busy) return;
+            addUser(text);
+            $input.value = '';
+            botReply(() => respond(text));
+        }
+
+        $form.addEventListener('submit', e => { e.preventDefault(); send($input.value); });
+        $chips.addEventListener('click', e => { const b = e.target.closest('[data-chip]'); if (b) send(b.dataset.chip); });
+        $chat.addEventListener('click', e => {
+            const b = e.target.closest('[data-act]'); if (!b) return;
+            const p = plans[b.dataset.id]; if (!p) return;
+            const act = b.dataset.act;
+            if (act === 'prev') p.viewMonth = new Date(p.viewMonth.getFullYear(), p.viewMonth.getMonth() - 1, 1);
+            if (act === 'next') p.viewMonth = new Date(p.viewMonth.getFullYear(), p.viewMonth.getMonth() + 1, 1);
+            if (act === 'toggle') p.expanded = !p.expanded;
+            if (act === 'reroll') {
+                const np = buildPlan(p.req, Math.floor(Math.random() * 1e9));
+                if (!np.error) { p.items = np.items; p.total = np.total; }
+            }
+            if (act === 'save') {
+                if (p.saving || p.saved) return;
+                p.saving = true;
+                b.disabled = true; b.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>กำลังบันทึก...';
+                savePlan(p).then(() => {
+                    p.saving = false; p.saved = true; renderCard(p);
+                    botReply(() => addBot('บันทึกเป้าหมายเรียบร้อย! 🎉 ไปดูความคืบหน้าได้ที่หน้า <a href="dashboard.html" class="font-semibold text-[#9c8a7e] underline">ติดตาม</a> เริ่มออมวันแรกกันเลย สู้ๆ!'));
+                }, err => {
+                    p.saving = false; renderCard(p);
+                    addBot(`บันทึกไม่สำเร็จ 😢 ${esc(err.message)} ลองใหม่อีกครั้งนะ`);
+                });
+                return;
+            }
+            renderCard(p);
+        });
+
+        // ข้อความต้อนรับ (หลังโหลดข้อมูลผู้ใช้เสร็จ)
+        AOMSUK.onReady(() => {
+        addBot(`<p class="font-semibold text-[#9c8a7e]">สวัสดี ${esc(AOMSUK.displayName())}! ฉันคือผู้ช่วยออมเงินของ AOMSUK 🐷</p>
+            <p>บอกเป้าหมายการออมมาเป็นประโยคเดียวได้เลย ทั้ง <b>ยอดเงิน</b> <b>ระยะเวลา</b> และ<b>เงื่อนไข</b> แบบรายวัน รายสัปดาห์ หรือรายเดือน แล้วฉันจะจัดตารางให้ทันที</p>
+            <p class="text-[12px] text-gray-600">ลองแตะตัวอย่างด้านล่าง หรือพิมพ์ "ช่วย" เพื่อดูคำสั่งทั้งหมด</p>`);
+        setChips(EXAMPLES);
+
+        // เปิดจากหน้าอื่นพร้อมคำสั่ง เช่น chat.html?q=ออม 390 บาท ใน 1 เดือน
+        const initialQ = new URLSearchParams(location.search).get('q');
+        if (initialQ) {
+            history.replaceState(null, '', location.pathname);
+            setTimeout(() => send(initialQ.slice(0, 200)), 400);
+        }
+        });
+    </script>
+</body>
+</html>

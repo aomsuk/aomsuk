@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AOMSUK - Login</title>
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+    <script>window.AOMSUK && AOMSUK.authState().then(u => { if (u && !window.__aomsukBusy) location.replace('dashboard.html'); });</script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+        .shake { animation: shake .3s; }
+        @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+    </style>
+</head>
+<body class="bg-[#d8eafe] min-h-screen flex flex-col">
+    <div class="bg-[#9c8a7e] py-4 flex justify-center items-center shadow-md">
+        <h1 class="text-2xl font-bold text-white tracking-widest flex items-center gap-2">
+            AOMSUK <i class="fa-solid fa-piggy-bank text-white"></i>
+        </h1>
+    </div>
+    <div class="flex-1 flex flex-col items-center justify-center p-6">
+        <div class="mb-4 z-0"><img src="https://cdn-icons-png.flaticon.com/512/3135/3135679.png" alt="" class="w-48 h-48 opacity-90"></div>
+        <div id="card" class="bg-white w-full max-w-sm rounded-[30px] p-8 shadow-lg z-10 border border-gray-100">
+            <form id="loginForm" class="space-y-4" novalidate>
+                <div id="notice" class="hidden text-sm text-green-700 bg-green-50 rounded-2xl px-4 py-2 text-center"></div>
+                <input id="email" type="email" autocomplete="email" placeholder="อีเมล" class="w-full px-4 py-3 bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
+                <div class="relative">
+                    <input id="password" type="password" autocomplete="current-password" placeholder="รหัสผ่าน" class="w-full px-4 py-3 pr-12 bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
+                    <button type="button" id="togglePw" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#9c8a7e] w-8 h-8" aria-label="แสดงรหัสผ่าน"><i class="fa-solid fa-eye"></i></button>
+                </div>
+                <div class="text-right -mt-2"><button type="button" id="forgotBtn" class="text-xs text-gray-500 hover:text-[#9c8a7e]">ลืมรหัสผ่าน?</button></div>
+                <p id="error" class="hidden text-sm text-red-500 text-center -mt-1"></p>
+                <button id="submitBtn" type="submit" class="w-full bg-[#9c8a7e] text-white font-semibold py-3 rounded-2xl shadow-md hover:bg-opacity-90 disabled:opacity-60">เข้าสู่ระบบ</button>
+                <div class="text-center mt-2">
+                    <span class="text-gray-400 text-sm">ยังไม่มีบัญชี?</span>
+                    <a href="register.html" class="text-gray-600 font-medium hover:text-[#9c8a7e]">สมัครสมาชิก</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const $form = document.getElementById('loginForm'), $email = document.getElementById('email'), $pw = document.getElementById('password');
+        const $err = document.getElementById('error'), $btn = document.getElementById('submitBtn');
+
+        // จำอีเมลล่าสุด / ข้อความหลังสมัครเสร็จ
+        $email.value = AOMSUK.lastEmail();
+        if ($email.value) $pw.focus(); else $email.focus();
+
+        document.getElementById('togglePw').addEventListener('click', e => {
+            const show = $pw.type === 'password';
+            $pw.type = show ? 'text' : 'password';
+            e.currentTarget.innerHTML = `<i class="fa-solid ${show ? 'fa-eye-slash' : 'fa-eye'}"></i>`;
+        });
+
+        function fail(msg, field) {
+            $err.textContent = msg; $err.classList.remove('hidden');
+            [$email, $pw].forEach(el => el.classList.remove('ring-2', 'ring-red-400'));
+            const el = field === 'password' ? $pw : $email;
+            el.classList.add('ring-2', 'ring-red-400'); el.focus();
+            const card = document.getElementById('card');
+            card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake');
+        }
+        [$email, $pw].forEach(el => el.addEventListener('input', () => { $err.classList.add('hidden'); el.classList.remove('ring-2', 'ring-red-400'); }));
+
+        // ลืมรหัสผ่าน -> Firebase ส่งอีเมลรีเซ็ตให้
+        document.getElementById('forgotBtn').addEventListener('click', async () => {
+            const email = $email.value.trim();
+            if (!email || !AOMSUK.isValidEmail(email)) return fail('กรอกอีเมลที่สมัครไว้ก่อน แล้วกด "ลืมรหัสผ่าน?" อีกครั้ง', 'email');
+            const res = await AOMSUK.resetPassword(email);
+            if (!res.ok) return fail(res.error, res.field);
+            $err.classList.add('hidden');
+            const n = document.getElementById('notice');
+            n.textContent = `ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ ${email} แล้ว (ถ้าไม่เจอ ลองดูในโฟลเดอร์ Spam)`;
+            n.classList.remove('hidden');
+        });
+
+        $form.addEventListener('submit', async e => {
+            e.preventDefault();
+            const email = $email.value.trim(), pw = $pw.value;
+            if (!email) return fail('กรุณากรอกอีเมล', 'email');
+            if (!AOMSUK.isValidEmail(email)) return fail('รูปแบบอีเมลไม่ถูกต้อง', 'email');
+            if (!pw) return fail('กรุณากรอกรหัสผ่าน', 'password');
+            $btn.disabled = true; $btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> กำลังเข้าสู่ระบบ...';
+            const res = await AOMSUK.login(email, pw);
+            if (res.ok) return location.replace('dashboard.html');
+            $btn.disabled = false; $btn.textContent = 'เข้าสู่ระบบ';
+            fail(res.error, res.field);
+        });
+    </script>
+</body>
+</html>

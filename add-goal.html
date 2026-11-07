@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AOMSUK - เพิ่มเป้าหมาย</title>
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+        ::-webkit-scrollbar { display: none; }
+        * { scrollbar-width: none; }
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+        .pop-in { animation: popIn .2s ease-out; }
+        @keyframes popIn { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+        .shake { animation: shake .3s; }
+        @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+    </style>
+</head>
+<body class="bg-[#d8eafe] min-h-screen flex flex-col relative overflow-x-hidden">
+
+    <!-- Header ด้านบน -->
+    <div class="bg-[#9c8a7e] p-4 flex justify-between items-center shadow-md sticky top-0 z-30">
+        <button onclick="toggleMenu()" class="text-white text-2xl focus:outline-none">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+        <h1 class="text-2xl font-bold text-white tracking-widest">AOMSUK</h1>
+        <button id="bellBtn" class="text-yellow-400 text-2xl relative focus:outline-none" aria-label="แจ้งเตือน">
+            <i class="fa-solid fa-bell"></i>
+        </button>
+    </div>
+
+    <!-- Backdrop -->
+    <div id="backdrop" onclick="toggleMenu()" class="fixed inset-0 bg-black/40 z-40 hidden transition-opacity"></div>
+
+    <!-- Sidebar Menu ด้านซ้าย -->
+    <div id="sidebar" class="fixed top-0 left-0 h-full w-64 bg-white z-50 shadow-2xl transform -translate-x-full transition-transform duration-300 ease-in-out flex flex-col pt-16">
+        <nav class="flex-1">
+            <a href="settings.html" class="flex items-center gap-4 px-6 py-5 text-gray-800 font-bold hover:bg-gray-50 border-b border-gray-200">
+                <i class="fa-solid fa-circle-user text-2xl text-black"></i>
+                <span>บัญชีของฉัน</span>
+            </a>
+            <a href="dashboard.html" class="flex items-center gap-4 px-6 py-5 text-gray-800 font-bold hover:bg-gray-50 border-b border-gray-200">
+                <i class="fa-solid fa-paw text-2xl text-black"></i>
+                <span>ติดตาม</span>
+            </a>
+            <a href="add-goal.html" class="flex items-center gap-4 px-6 py-5 text-gray-800 font-bold bg-gray-100 border-l-4 border-[#9c8a7e] border-b border-gray-200">
+                <i class="fa-solid fa-square-plus text-2xl text-black"></i>
+                <span>เพิ่มเป้าหมาย</span>
+            </a>
+            <a href="chat.html" class="flex items-center gap-4 px-6 py-5 text-gray-800 font-bold hover:bg-gray-50 border-b border-gray-200">
+                <i class="fa-solid fa-comment-dots text-2xl text-black"></i>
+                <span>แชทบอท</span>
+            </a>
+            <a href="settings.html" class="flex items-center gap-4 px-6 py-5 text-gray-800 font-bold hover:bg-gray-50 border-b border-gray-200">
+                <i class="fa-solid fa-gear text-2xl text-black"></i>
+                <span>ตั้งค่า</span>
+            </a>
+        </nav>
+    </div>
+
+    <!-- Content -->
+    <div class="flex-1 px-4 pt-6 pb-8 space-y-6">
+
+        <!-- ตั้งค่าเป้าหมาย -->
+        <form id="goalForm" novalidate>
+            <div class="flex items-center gap-4">
+                <div class="relative shrink-0">
+                    <!-- กล่องรูป/ไอคอน: แตะเพื่อเลือกรูปจากเครื่อง หรือเลือกไอคอน -->
+                    <button type="button" id="imageBtn" class="w-28 h-28 bg-white rounded-3xl shadow-sm flex flex-col items-center justify-center text-gray-400 border border-gray-100 overflow-hidden" aria-label="เพิ่มรูปสินค้า"></button>
+                    <span class="absolute -bottom-1 -right-1 w-8 h-8 bg-[#9c8a7e] text-white rounded-full flex items-center justify-center text-xs shadow pointer-events-none"><i class="fa-solid fa-camera"></i></span>
+                    <!-- เมนูเลือกรูป -->
+                    <div id="imageMenu" class="hidden absolute top-full left-0 mt-2 z-20 bg-white rounded-2xl shadow-xl border border-gray-100 p-3 w-72 pop-in">
+                        <button type="button" id="uploadBtn" class="w-full flex items-center justify-center gap-2 bg-[#9c8a7e] hover:bg-[#8a7a6f] text-white text-sm font-semibold rounded-xl py-2.5">
+                            <i class="fa-solid fa-image"></i> เลือกรูปจากเครื่อง / ถ่ายรูป
+                        </button>
+                        <button type="button" id="removeImageBtn" class="hidden w-full mt-2 text-xs text-red-500 font-semibold py-1.5">ลบรูปนี้</button>
+                        <p class="text-[11px] text-gray-500 text-center my-2">หรือเลือกไอคอน</p>
+                        <div id="emojiGrid" class="grid grid-cols-6 gap-1"></div>
+                    </div>
+                    <input id="fileInput" type="file" accept="image/*" class="hidden">
+                </div>
+                <div class="flex-1 space-y-2 min-w-0">
+                    <h3 class="font-bold text-gray-700 text-sm">ตั้งค่าเป้าหมายของคุณ</h3>
+                    <input id="nameInput" type="text" maxlength="40" placeholder="เป้าหมาย เช่น หูฟัง" class="w-full px-3 py-2 bg-white rounded-full text-center text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#9c8a7e]">
+                    <input id="priceInput" type="number" inputmode="decimal" min="1" placeholder="ราคา (บาท)" class="w-full px-3 py-2 bg-white rounded-full text-center text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#9c8a7e]">
+                </div>
+            </div>
+            <p id="formError" class="hidden text-xs text-red-500 mt-2 text-center"></p>
+            <button type="submit" class="mt-3 w-full bg-[#9c8a7e] hover:bg-[#8a7a6f] text-white font-bold text-sm rounded-full py-2.5 shadow-sm transition-colors disabled:opacity-60">
+                <i class="fa-solid fa-floppy-disk mr-1"></i> บันทึกเป้าหมาย
+            </button>
+        </form>
+
+        <!-- การ์ดหลังบันทึกสำเร็จ -->
+        <div id="successCard" class="hidden"></div>
+
+        <!-- ไอเดียเป้าหมาย (ส่วนเดียว) -->
+        <div>
+            <h3 class="font-bold text-gray-800 text-sm">ยังคิดไม่ออก? ลองเลือกจากไอเดียนี้ 💡</h3>
+            <p class="text-xs text-gray-500 mb-2">แตะเพื่อเติมชื่อและราคาลงฟอร์มด้านบน แล้วแก้ไขได้ตามใจ</p>
+            <div id="ideas" class="grid grid-cols-2 gap-2"></div>
+        </div>
+
+        <!-- เป้าหมายที่บันทึกไว้ -->
+        <div class="bg-white rounded-3xl p-4 shadow-sm">
+            <div class="flex items-center justify-between border-b-2 border-[#9c8a7e] pb-2 mb-3">
+                <h3 class="font-bold text-[#9c8a7e]">เป้าหมายที่บันทึกไว้</h3>
+                <a href="dashboard.html" class="text-xs text-gray-500 underline">ดูในหน้าติดตาม</a>
+            </div>
+            <div id="savedList" class="space-y-3"></div>
+            <p class="text-[11px] text-gray-400 text-center mt-3">แตะรูปของเป้าหมายเพื่อเปลี่ยนรูป</p>
+            <input id="changeFileInput" type="file" accept="image/*" class="hidden">
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="hidden fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-gray-800/90 text-white text-sm px-4 py-2 rounded-full shadow-lg whitespace-nowrap"></div>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('-translate-x-full');
+            document.getElementById('backdrop').classList.toggle('hidden');
+        }
+
+        // ---------------- ข้อมูล (Firebase ผ่าน app.js) ----------------
+        //   AOMSUK.wishlist : เป้าหมาย { id, name, price, emoji, image(รูปย่อ) }
+        const A = AOMSUK, esc = A.esc;
+        const thb = n => (+n).toLocaleString('th-TH', { maximumFractionDigits: 2 });
+        const $ = id => document.getElementById(id);
+
+        function toast(msg) {
+            const t = $('toast'); t.textContent = msg; t.classList.remove('hidden');
+            clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), 2400);
+        }
+
+        // ---------------- ไอคอนอัตโนมัติจากชื่อ ----------------
+        const EMOJIS = ['🎯', '👕', '👟', '👜', '🎟️', '🧋', '🪞', '💄', '📱', '🎧', '💻', '⌚', '🎮', '📚', '✈️', '🏖️', '🎁', '🍣', '🐶', '🚲', '📷', '💍', '🏠', '🎸'];
+        const KEYWORD_EMOJI = [
+            [/เสื้อ|t-?shirt|shirt|stussy|uniqlo|ชุด|กางเกง/i, '👕'], [/รองเท้า|nike|adidas|sneaker/i, '👟'],
+            [/กระเป๋า|louis|vuitton|\blv\b|gucci|prada|bag/i, '👜'], [/ตั๋ว|หนัง|movie|ticket|คอนเสิร์ต|concert/i, '🎟️'],
+            [/ชา|ชานม|กาแฟ|bearhouse|coffee|tea/i, '🧋'], [/cushion|คุชชั่น|เครื่องสำอาง|ครีม|skincare|สกินแคร์/i, '🪞'],
+            [/ลิป|lip|makeup/i, '💄'], [/โทรศัพท์|มือถือ|iphone|phone|samsung/i, '📱'], [/หูฟัง|airpods|headphone/i, '🎧'],
+            [/คอม|notebook|laptop|macbook|ipad|แท็บเล็ต/i, '💻'], [/นาฬิกา|watch/i, '⌚'], [/เกม|game|switch|ps5/i, '🎮'],
+            [/หนังสือ|book/i, '📚'], [/เที่ยว|ตั๋วเครื่องบิน|trip|travel|ญี่ปุ่น|เกาหลี/i, '✈️'], [/ทะเล|beach/i, '🏖️'],
+            [/ของขวัญ|gift|วันเกิด/i, '🎁'], [/ซูชิ|บุฟเฟ่ต์|อาหาร|ชาบู|หมูกระทะ/i, '🍣'], [/กล้อง|camera/i, '📷'], [/แหวน|ring/i, '💍'], [/จักรยาน|bike/i, '🚲']
+        ];
+        const guessEmoji = name => (KEYWORD_EMOJI.find(([re]) => re.test(name)) || [, '🎯'])[1];
+
+        // ---------------- กล่องรูป / ไอคอน ----------------
+        const $name = $('nameInput'), $price = $('priceInput'), $err = $('formError');
+        const $imgBtn = $('imageBtn'), $menu = $('imageMenu');
+        let chosenEmoji = null, emojiManual = false, chosenImage = null, loadingImage = false;
+
+        function renderImageBox() {
+            if (loadingImage) $imgBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-2xl text-[#9c8a7e]"></i>';
+            else if (chosenImage) $imgBtn.innerHTML = `<img src="${chosenImage}" alt="" class="w-full h-full object-cover">`;
+            else if (chosenEmoji) $imgBtn.innerHTML = `<span class="text-5xl">${chosenEmoji}</span>`;
+            else $imgBtn.innerHTML = '<i class="fa-solid fa-image text-3xl"></i><span class="text-[11px] mt-1">เพิ่มรูปสินค้า</span>';
+            $('removeImageBtn').classList.toggle('hidden', !chosenImage);
+        }
+        function setEmoji(e, manual) { chosenEmoji = e; if (manual) emojiManual = true; renderImageBox(); }
+
+        $('emojiGrid').innerHTML = EMOJIS.map(e => `<button type="button" data-emoji="${e}" class="text-2xl h-9 rounded-lg hover:bg-[#f4efe9]">${e}</button>`).join('');
+        $imgBtn.addEventListener('click', e => { e.stopPropagation(); $menu.classList.toggle('hidden'); });
+        $menu.addEventListener('click', e => {
+            e.stopPropagation();
+            const b = e.target.closest('[data-emoji]');
+            if (b) { chosenImage = null; setEmoji(b.dataset.emoji, true); $menu.classList.add('hidden'); }
+        });
+        document.addEventListener('click', () => $menu.classList.add('hidden'));
+        $('uploadBtn').addEventListener('click', () => { $menu.classList.add('hidden'); $('fileInput').click(); });
+        $('removeImageBtn').addEventListener('click', () => { chosenImage = null; renderImageBox(); $menu.classList.add('hidden'); });
+
+        $('fileInput').addEventListener('change', async e => {
+            const file = e.target.files[0]; e.target.value = '';
+            if (!file) return;
+            loadingImage = true; renderImageBox();
+            try { chosenImage = await A.resizeImage(file, 480); toast('เพิ่มรูปแล้ว 📷'); }
+            catch (err) { toast(err.message); }
+            finally { loadingImage = false; renderImageBox(); }
+        });
+
+        $name.addEventListener('input', () => { if (!emojiManual) setEmoji($name.value.trim() ? guessEmoji($name.value) : null); $err.classList.add('hidden'); });
+        $price.addEventListener('input', () => $err.classList.add('hidden'));
+
+        function resetForm() {
+            $name.value = ''; $price.value = '';
+            chosenImage = null; chosenEmoji = null; emojiManual = false; renderImageBox();
+        }
+        function fillForm(name, price) {
+            $name.value = name; $price.value = price || '';
+            if (!chosenImage) { emojiManual = false; setEmoji(guessEmoji(name)); }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setTimeout(() => (price ? $name : $price).focus(), 300);
+        }
+        function showError(msg, el) {
+            $err.textContent = msg; $err.classList.remove('hidden');
+            el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); el.focus();
+        }
+
+        // ---------------- บันทึกเป้าหมาย ----------------
+        const $saveBtn = document.querySelector('#goalForm button[type=submit]');
+        $('goalForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            if (loadingImage) return toast('รอให้รูปโหลดเสร็จก่อนนะ');
+            const name = $name.value.trim(), price = parseFloat($price.value);
+            if (!name) return showError('กรุณาใส่ชื่อเป้าหมาย', $name);
+            if (!(price > 0)) return showError('กรุณาใส่ราคาที่มากกว่า 0 บาท', $price);
+            if (price > 10000000) return showError('ราคาสูงเกินไป (ไม่เกิน 10,000,000 บาท)', $price);
+            if (A.wishlist.some(w => w.name.toLowerCase() === name.toLowerCase())) return showError('มีเป้าหมายชื่อนี้อยู่แล้ว', $name);
+
+            const item = { id: A.newId(), emoji: chosenEmoji || guessEmoji(name), name, price: Math.round(price * 100) / 100, createdAt: new Date().toISOString() };
+            if (chosenImage) item.image = chosenImage;
+            const label = $saveBtn.innerHTML;
+            $saveBtn.disabled = true; $saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> กำลังบันทึก...';
+            try { await A.saveWish(item); }
+            catch (err) { return showError('บันทึกไม่สำเร็จ: ' + err.message, $name); }
+            finally { $saveBtn.disabled = false; $saveBtn.innerHTML = label; }
+
+            showSuccess(item);
+            resetForm();
+            toast('บันทึกเป้าหมายแล้ว 🎉');
+        });
+
+        const thumb = (w, cls) => w.image
+            ? `<img src="${w.image}" alt="" class="${cls} object-cover">`
+            : `<span class="${cls} bg-[#f4efe9] flex items-center justify-center text-2xl">${esc(w.emoji || '🎯')}</span>`;
+
+        function showSuccess(item) {
+            const el = $('successCard');
+            const plans = [['1 เดือน', '1 เดือน'], ['3 เดือน', '3 เดือน'], ['รายสัปดาห์ 2 เดือน', '2 เดือน รายสัปดาห์']];
+            el.innerHTML = `<div class="bg-[#fcefdc] rounded-3xl p-4 shadow-sm pop-in">
+                <div class="flex items-center gap-3">
+                    ${thumb(item, 'w-12 h-12 rounded-2xl shrink-0')}
+                    <div class="flex-1 min-w-0"><p class="font-bold text-gray-800 text-sm truncate">${esc(item.name)}</p><p class="text-xs text-gray-600">${thb(item.price)} THB · บันทึกแล้ว ✓</p></div>
+                    <button onclick="document.getElementById('successCard').classList.add('hidden')" class="text-gray-400 text-lg"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <p class="text-xs text-[#7a6a5f] font-semibold mt-3 mb-2"><i class="fa-solid fa-comment-dots mr-1"></i>ให้แชทบอทช่วยวางแผนออมเงินก้อนนี้</p>
+                <div class="flex flex-wrap gap-2">
+                    ${plans.map(([label, q]) => `<a href="chat.html?q=${encodeURIComponent(`ออม ${item.price} บาท ใน ${q} เพื่อซื้อ ${item.name}`)}" class="bg-white text-[#7a6a5f] text-xs px-3 py-1.5 rounded-full border border-[#d9cfc7] shadow-sm">ออมใน ${label}</a>`).join('')}
+                </div>
+            </div>`;
+            el.classList.remove('hidden');
+        }
+
+        // ---------------- ไอเดียเป้าหมาย ----------------
+        const IDEAS = [['👕', 'เสื้อ stussy', 1500], ['👟', 'รองเท้า Nike', 3200], ['🎧', 'AirPods', 6990], ['🎟️', 'ตั๋วหนัง 2 ใบ', 480], ['🧋', 'ชานม', 149], ['✈️', 'ไปเที่ยวทะเล', 5000]];
+        $('ideas').innerHTML = IDEAS.map(([e, n, p]) => `
+            <button type="button" data-fill="${esc(n)}" data-price="${p}" class="bg-white rounded-2xl px-3 py-2.5 shadow-sm flex items-center gap-2 text-left hover:ring-2 hover:ring-[#9c8a7e] transition">
+                <span class="text-2xl">${e}</span>
+                <span class="min-w-0"><span class="block text-sm font-semibold text-gray-700 truncate">${esc(n)}</span><span class="block text-xs text-gray-500">${p.toLocaleString('en-US')} THB</span></span>
+            </button>`).join('');
+        $('ideas').addEventListener('click', e => { const b = e.target.closest('[data-fill]'); if (b) fillForm(b.dataset.fill, b.dataset.price); });
+
+        // ---------------- รายการที่บันทึกไว้ ----------------
+        function renderSaved() {
+            const el = $('savedList');
+            if (!A.wishlist.length) { el.innerHTML = '<p class="text-center text-sm text-gray-500 py-2">ยังไม่มีเป้าหมาย เพิ่มอันแรกด้านบนได้เลย</p>'; return; }
+            const saved = A.totalSavings();
+            el.innerHTML = [...A.wishlist].sort((a, b) => b.price - a.price).map(w => {
+                const need = Math.max(0, w.price - saved);
+                return `<div class="flex justify-between items-center gap-2">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <button data-change-img="${esc(w.id)}" class="relative shrink-0" aria-label="เปลี่ยนรูป">${thumb(w, 'w-12 h-12 rounded-2xl')}</button>
+                        <span class="font-bold text-gray-700 text-sm truncate">${esc(w.name)}</span>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <div class="text-right"><div class="font-bold text-gray-700 text-sm">${thb(w.price)} THB</div>
+                        <div class="text-[10px] ${need > 0 ? 'text-[#cc9c94]' : 'text-gray-500'}">${need > 0 ? `คุณยังขาดอีก ${thb(need)} บาท` : 'คุณสามารถซื้อสินค้านี้ได้!'}</div></div>
+                        <button data-delete="${esc(w.id)}" class="text-gray-300 hover:text-red-500 px-1" aria-label="ลบ"><i class="fa-solid fa-trash-can text-sm"></i></button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        let changingId = null;
+        $('savedList').addEventListener('click', e => {
+            const c = e.target.closest('[data-change-img]');
+            if (c) { changingId = c.dataset.changeImg; $('changeFileInput').click(); return; }
+            const d = e.target.closest('[data-delete]');
+            if (d) {
+                const w = A.wishlist.find(x => x.id === d.dataset.delete);
+                if (w && confirm(`ลบ "${w.name}" ออกจากเป้าหมายใช่ไหม?`)) A.deleteWish(w.id).then(() => toast('ลบแล้ว'), err => toast('ลบไม่สำเร็จ: ' + err.message));
+            }
+        });
+        $('changeFileInput').addEventListener('change', async e => {
+            const file = e.target.files[0]; e.target.value = '';
+            const w = A.wishlist.find(x => x.id === changingId);
+            if (!file || !w) return;
+            toast('กำลังอัปโหลดรูป...');
+            try { await A.saveWish({ ...w, image: await A.resizeImage(file, 480) }); toast('เปลี่ยนรูปแล้ว 📷'); }
+            catch (err) { toast(err.message); }
+        });
+
+        renderImageBox();
+        A.onReady(renderSaved);
+        A.onChange(renderSaved);
+    </script>
+</body>
+</html>

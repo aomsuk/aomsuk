@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AOMSUK - Register</title>
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+    <script>window.AOMSUK && AOMSUK.authState().then(u => { if (u && !window.__aomsukBusy) location.replace('dashboard.html'); });</script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+        .shake { animation: shake .3s; }
+        @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+    </style>
+</head>
+<body class="bg-[#d8eafe] min-h-screen flex flex-col">
+    <div class="bg-[#9c8a7e] py-4 flex justify-center items-center shadow-md relative">
+        <a href="login.html" class="absolute left-4 text-white text-xl" aria-label="กลับไปหน้าเข้าสู่ระบบ"><i class="fa-solid fa-chevron-left"></i></a>
+        <h1 class="text-2xl font-bold text-white tracking-widest flex items-center gap-2">
+            AOMSUK <i class="fa-solid fa-piggy-bank text-white"></i>
+        </h1>
+    </div>
+    <div class="flex-1 flex flex-col items-center justify-center p-6">
+        <div class="mb-3 z-0"><img src="https://cdn-icons-png.flaticon.com/512/3135/3135679.png" alt="" class="w-28 h-28 opacity-90"></div>
+        <div id="card" class="bg-white w-full max-w-sm rounded-[30px] p-8 shadow-lg z-10 border border-gray-100">
+            <h2 class="text-center font-bold text-[#9c8a7e] text-lg mb-1">สมัครสมาชิก</h2>
+            <p class="text-center text-xs text-gray-500 mb-5">เริ่มต้นออมเงินไปกับ AOMSUK 🐷</p>
+            <form id="regForm" class="space-y-4" novalidate>
+                <input id="name" type="text" maxlength="30" autocomplete="nickname" placeholder="ชื่อเล่น" class="w-full px-4 py-3 bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
+                <input id="email" type="email" autocomplete="email" placeholder="อีเมล" class="w-full px-4 py-3 bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
+                <div>
+                    <div class="relative">
+                        <input id="password" type="password" autocomplete="new-password" placeholder="รหัสผ่าน (อย่างน้อย 8 ตัว)" class="w-full px-4 py-3 pr-12 bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
+                        <button type="button" data-toggle="password" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#9c8a7e] w-8 h-8" aria-label="แสดงรหัสผ่าน"><i class="fa-solid fa-eye"></i></button>
+                    </div>
+                    <div class="flex gap-1 mt-2 px-1">
+                        <div class="strength h-1.5 flex-1 rounded-full bg-gray-200"></div>
+                        <div class="strength h-1.5 flex-1 rounded-full bg-gray-200"></div>
+                        <div class="strength h-1.5 flex-1 rounded-full bg-gray-200"></div>
+                        <div class="strength h-1.5 flex-1 rounded-full bg-gray-200"></div>
+                    </div>
+                    <p id="strengthText" class="text-[11px] text-gray-400 mt-1 px-1">ใช้ตัวอักษร ตัวเลข และสัญลักษณ์ผสมกันจะปลอดภัยกว่า</p>
+                </div>
+                <div class="relative">
+                    <input id="confirm" type="password" autocomplete="new-password" placeholder="ยืนยันรหัสผ่าน" class="w-full px-4 py-3 pr-12 bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
+                    <span id="matchIcon" class="absolute right-4 top-1/2 -translate-y-1/2 text-sm"></span>
+                </div>
+                <p id="error" class="hidden text-sm text-red-500 text-center -mt-1"></p>
+                <button id="submitBtn" type="submit" class="w-full bg-[#9c8a7e] text-white font-semibold py-3 rounded-2xl shadow-md hover:bg-opacity-90 disabled:opacity-60">สมัครสมาชิก</button>
+                <div class="text-center mt-2">
+                    <span class="text-gray-400 text-sm">มีบัญชีอยู่แล้ว?</span>
+                    <a href="login.html" class="text-gray-600 font-medium hover:text-[#9c8a7e]">เข้าสู่ระบบ</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const $ = id => document.getElementById(id);
+        const $name = $('name'), $email = $('email'), $pw = $('password'), $cf = $('confirm'), $err = $('error'), $btn = $('submitBtn');
+        $name.focus();
+
+        document.querySelectorAll('[data-toggle]').forEach(b => b.addEventListener('click', () => {
+            const show = $pw.type === 'password';
+            $pw.type = $cf.type = show ? 'text' : 'password';
+            b.innerHTML = `<i class="fa-solid ${show ? 'fa-eye-slash' : 'fa-eye'}"></i>`;
+        }));
+
+        // ความแข็งแรงของรหัสผ่าน
+        function strength(pw) {
+            let s = 0;
+            if (pw.length >= 8) s++;
+            if (/[a-z]/.test(pw) && /[A-Z]/.test(pw) || /[ก-๙]/.test(pw)) s++;
+            if (/\d/.test(pw)) s++;
+            if (/[^A-Za-z0-9ก-๙]/.test(pw)) s++;
+            if (pw.length < 8) s = Math.min(s, 1);
+            return s;
+        }
+        const LEVELS = [['', 'text-gray-400', 'bg-gray-200'], ['อ่อนมาก', 'text-red-500', 'bg-red-400'], ['พอใช้', 'text-orange-500', 'bg-orange-400'], ['ดี', 'text-yellow-600', 'bg-yellow-400'], ['แข็งแรงมาก 💪', 'text-green-600', 'bg-green-500']];
+        function updateStrength() {
+            const pw = $pw.value, s = pw ? Math.max(1, strength(pw)) : 0, [label, tcls, bcls] = LEVELS[s];
+            document.querySelectorAll('.strength').forEach((el, i) => { el.className = `strength h-1.5 flex-1 rounded-full ${i < s ? bcls : 'bg-gray-200'}`; });
+            const t = $('strengthText');
+            t.className = `text-[11px] mt-1 px-1 ${pw ? tcls : 'text-gray-400'}`;
+            t.textContent = pw ? `ความปลอดภัย: ${label}${pw.length < 8 ? ` · อีก ${8 - pw.length} ตัว` : ''}` : 'ใช้ตัวอักษร ตัวเลข และสัญลักษณ์ผสมกันจะปลอดภัยกว่า';
+        }
+        function updateMatch() {
+            const icon = $('matchIcon');
+            if (!$cf.value) return icon.innerHTML = '';
+            icon.innerHTML = $cf.value === $pw.value ? '<i class="fa-solid fa-circle-check text-green-500"></i>' : '<i class="fa-solid fa-circle-xmark text-red-400"></i>';
+        }
+        $pw.addEventListener('input', () => { updateStrength(); updateMatch(); });
+        $cf.addEventListener('input', updateMatch);
+        [$name, $email, $pw, $cf].forEach(el => el.addEventListener('input', () => { $err.classList.add('hidden'); el.classList.remove('ring-2', 'ring-red-400'); }));
+
+        function fail(msg, el) {
+            $err.textContent = msg; $err.classList.remove('hidden');
+            [$name, $email, $pw, $cf].forEach(x => x.classList.remove('ring-2', 'ring-red-400'));
+            if (el) { el.classList.add('ring-2', 'ring-red-400'); el.focus(); }
+            const card = $('card'); card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake');
+        }
+
+        $('regForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const name = $name.value.trim(), email = $email.value.trim(), pw = $pw.value;
+            if (!name) return fail('กรุณากรอกชื่อเล่น', $name);
+            if (!email) return fail('กรุณากรอกอีเมล', $email);
+            if (!AOMSUK.isValidEmail(email)) return fail('รูปแบบอีเมลไม่ถูกต้อง เช่น name@email.com', $email);
+            if (pw.length < 8) return fail('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร', $pw);
+            if (/^\s|\s$/.test(pw)) return fail('รหัสผ่านต้องไม่ขึ้นต้นหรือลงท้ายด้วยช่องว่าง', $pw);
+            if (pw !== $cf.value) return fail('ยืนยันรหัสผ่านไม่ตรงกัน', $cf);
+
+            $btn.disabled = true; $btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> กำลังสมัคร...';
+            const res = await AOMSUK.register({ name, email, password: pw });
+            if (res.ok) {
+                $('card').innerHTML = `<div class="text-center py-6">
+                    <div class="text-5xl mb-3">🎉</div>
+                    <p class="font-bold text-[#9c8a7e] text-lg">สมัครสมาชิกสำเร็จ!</p>
+                    <p class="text-sm text-gray-500 mt-1">ยินดีต้อนรับ ${name.replace(/[&<>"']/g, '')} กำลังพาไปตั้งเป้าหมายแรก...</p>
+                </div>`;
+                return setTimeout(() => location.replace('add-goal.html'), 1300);
+            }
+            $btn.disabled = false; $btn.textContent = 'สมัครสมาชิก';
+            fail(res.error, res.field === 'email' ? $email : null);
+        });
+    </script>
+</body>
+</html>

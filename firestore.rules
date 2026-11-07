@@ -1,0 +1,16 @@
+rules_version = '2';
+
+// AOMSUK - Firestore Security Rules
+// ผู้ใช้แต่ละคนอ่าน/เขียนได้เฉพาะข้อมูลของตัวเองใน users/{uid} เท่านั้น
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+      match /{collection}/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid
+                           && collection in ['goals', 'wishlist', 'notifications'];
+      }
+    }
+  }
+}

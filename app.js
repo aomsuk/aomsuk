@@ -1,0 +1,439 @@
+/* =====================================================================
+   AOMSUK - app.js  (ใช้ร่วมกันทุกหน้า)
+   - ระบบบัญชีผู้ใช้: Firebase Authentication (อีเมล + รหัสผ่าน)
+   - ฐานข้อมูล: Cloud Firestore
+       users/{uid}                    : { name, email, createdAt, settings, interests[] }
+       users/{uid}/goals/{id}         : แผนการออมจากแชทบอท (schedule[])
+       users/{uid}/wishlist/{id}      : เป้าหมายสิ่งที่อยากซื้อ { emoji, name, price }
+       users/{uid}/notifications/{id} : การแจ้งเตือน { type, title, body, link, read, createdAt }
+   - กระดิ่งแจ้งเตือนมุมขวาบน + เมนูผู้ใช้ในแถบด้านข้าง
+   วิธีใช้ในแต่ละหน้า (ใส่ใน <head>):
+       <script src="firebase-config.js"></script>
+       <script src="app.js"></script>
+   แล้วในสคริปต์ของหน้า:  AOMSUK.onReady(render); AOMSUK.onChange(render);
+   ===================================================================== */
+(function () {
+    const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
+    const page = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    const PUBLIC = /^(index|login|register)\.html$/.test(page);
+
+    const DEFAULT_SETTINGS = { notifyDue: true, notifyMissed: true, notifyGoal: true, notifyWish: true, browserNotif: false };
+
+    // ---------- helpers ----------
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const pad = n => String(n).padStart(2, '0');
+    const dkey = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const money = n => (+n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const newId = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '').slice(0, 20) : Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    const clean = o => JSON.parse(JSON.stringify(o));
+    const savedOf = g => (g.schedule || []).reduce((s, it) => s + (it.saved ? +it.amount : 0), 0);
+    const nowISO = () => new Date().toISOString();
+
+    const ERR = {
+        'auth/email-already-in-use': ['อีเมลนี้สมัครสมาชิกไว้แล้ว ลองเข้าสู่ระบบแทนนะ', 'email'],
+        'auth/invalid-email': ['รูปแบบอีเมลไม่ถูกต้อง', 'email'],
+        'auth/missing-email': ['กรุณากรอกอีเมล', 'email'],
+        'auth/weak-password': ['รหัสผ่านอ่อนเกินไป (อย่างน้อย 6 ตัว)', 'password'],
+        'auth/missing-password': ['กรุณากรอกรหัสผ่าน', 'password'],
+        'auth/user-not-found': ['ไม่พบบัญชีนี้ กรุณาสมัครสมาชิกก่อน', 'email'],
+        'auth/wrong-password': ['รหัสผ่านไม่ถูกต้อง', 'password'],
+        'auth/invalid-credential': ['อีเมลหรือรหัสผ่านไม่ถูกต้อง', 'password'],
+        'auth/invalid-login-credentials': ['อีเมลหรือรหัสผ่านไม่ถูกต้อง', 'password'],
+        'auth/too-many-requests': ['ลองผิดหลายครั้งเกินไป กรุณารอสักครู่แล้วลองใหม่', null],
+        'auth/network-request-failed': ['เชื่อมต่ออินเทอร์เน็ตไม่ได้ ลองใหม่อีกครั้ง', null],
+        'auth/requires-recent-login': ['เพื่อความปลอดภัย กรุณาออกจากระบบแล้วเข้าใหม่ก่อนทำรายการนี้', null],
+        'auth/operation-not-allowed': ['ยังไม่ได้เปิดใช้การล็อกอินด้วยอีเมลใน Firebase Console (Authentication > Sign-in method)', null],
+        'auth/configuration-not-found': ['ยังไม่ได้เปิดใช้ Authentication ใน Firebase Console', null],
+        'auth/api-key-not-valid.-please-pass-a-valid-api-key.': ['apiKey ใน firebase-config.js ไม่ถูกต้อง', null],
+        'permission-denied': ['ไม่มีสิทธิ์เข้าถึงฐานข้อมูล ตรวจสอบ Firestore Rules', null],
+        'unavailable': ['เชื่อมต่อฐานข้อมูลไม่ได้ ตรวจสอบอินเทอร์เน็ต', null]
+    };
+    const errInfo = e => ERR[e && e.code] || [`เกิดข้อผิดพลาด: ${(e && (e.code || e.message)) || 'ไม่ทราบสาเหตุ'}`, null];
+
+    // ---------- global object ----------
+    const readyCbs = [], changeCbs = [];
+    let authResolve; const authPromise = new Promise(r => { authResolve = r; });
+    const A = window.AOMSUK = {
+        user: null, profile: null, settings: { ...DEFAULT_SETTINGS }, goals: [], wishlist: [], interests: [], notifications: [], isReady: false,
+        onReady(cb) { A.isReady ? cb(A) : readyCbs.push(cb); },
+        onChange(cb) { changeCbs.push(cb); },
+        authState: () => authPromise,
+        esc, dkey, money, newId, savedOf,
+        isValidEmail: e => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(e).trim()),
+        lastEmail: () => { try { return localStorage.getItem('aomsuk_last_email') || ''; } catch (e) { return ''; } },
+        totalSavings: () => A.goals.reduce((s, g) => s + savedOf(g), 0),
+        displayName: () => (A.profile && A.profile.name) || (A.user && A.user.displayName) || 'ผู้ใช้'
+    };
+    const rememberEmail = e => { try { localStorage.setItem('aomsuk_last_email', e); } catch (x) { } };
+
+    // ---------- loading overlay (หน้าที่ต้องล็อกอิน) ----------
+    if (!PUBLIC) {
+        const st = document.createElement('style');
+        st.textContent = 'html.aomsuk-loading body>*:not(#aomsukLoader){visibility:hidden}';
+        document.head.appendChild(st);
+        document.documentElement.classList.add('aomsuk-loading');
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!document.documentElement.classList.contains('aomsuk-loading')) return;
+            const l = document.createElement('div');
+            l.id = 'aomsukLoader';
+            l.style.cssText = 'position:fixed;inset:0;background:#d8eafe;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;font-family:Prompt,sans-serif;color:#9c8a7e';
+            l.innerHTML = '<i class="fa-solid fa-piggy-bank fa-bounce" style="font-size:48px"></i><p style="margin-top:12px;font-weight:600">กำลังโหลดข้อมูล...</p>';
+            document.body.appendChild(l);
+        });
+    }
+    function hideLoader() {
+        document.documentElement.classList.remove('aomsuk-loading');
+        const l = document.getElementById('aomsukLoader'); if (l) l.remove();
+    }
+
+    function showFatal(title, detail) {
+        const go = () => {
+            hideLoader();
+            if (document.getElementById('aomsukFatal')) return;
+            const d = document.createElement('div');
+            d.id = 'aomsukFatal';
+            d.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px;font-family:Prompt,sans-serif';
+            d.innerHTML = `<div style="background:#fff;border-radius:24px;padding:24px;max-width:380px;width:100%;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.2)">
+                <div style="font-size:40px">⚠️</div>
+                <p style="font-weight:700;color:#9c8a7e;font-size:18px;margin:8px 0">${esc(title)}</p>
+                <p style="color:#555;font-size:14px;line-height:1.6">${detail}</p>
+                <button onclick="location.reload()" style="margin-top:16px;background:#9c8a7e;color:#fff;border:0;border-radius:9999px;padding:10px 20px;font-weight:600;cursor:pointer">ลองใหม่</button>
+            </div>`;
+            document.body.appendChild(d);
+        };
+        document.body ? go() : document.addEventListener('DOMContentLoaded', go);
+    }
+
+    // ---------- config check ----------
+    const cfg = window.FIREBASE_CONFIG;
+    if (!cfg || !cfg.apiKey || /YOUR_/i.test(cfg.apiKey) || /YOUR_/i.test(cfg.projectId || '')) {
+        showFatal('ยังไม่ได้ตั้งค่า Firebase', 'เปิดไฟล์ <b>firebase-config.js</b> แล้ววาง config ของโปรเจกต์ Firebase ของคุณแทนค่า YOUR_... (ดูขั้นตอนในคู่มือ)');
+        return;
+    }
+
+    // ---------- boot ----------
+    let fb = null, listening = false, unsubs = [];
+    const booted = (async () => {
+        const [appM, authM, fsM] = await Promise.all([import(SDK + 'firebase-app.js'), import(SDK + 'firebase-auth.js'), import(SDK + 'firebase-firestore.js')]);
+        const app = appM.initializeApp(cfg);
+        fb = { authM, fsM, auth: authM.getAuth(app), db: fsM.getFirestore(app) };
+        let first = true;
+        authM.onAuthStateChanged(fb.auth, user => {
+            A.user = user;
+            if (first) { first = false; authResolve(user); }
+            if (!user) {
+                unsubs.forEach(u => u()); unsubs = []; listening = false;
+                if (!PUBLIC) location.replace('login.html');
+                return;
+            }
+            if (!PUBLIC && !listening) startListeners();
+        });
+    })();
+    booted.catch(e => { console.error(e); showFatal('โหลด Firebase ไม่สำเร็จ', 'ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต หรือค่าใน firebase-config.js<br><small style="color:#999">' + esc(e && e.message) + '</small>'); });
+
+    const userDoc = () => fb.fsM.doc(fb.db, 'users', A.user.uid);
+    const sub = (...p) => fb.fsM.doc(fb.db, 'users', A.user.uid, ...p);
+    const subCol = name => fb.fsM.collection(fb.db, 'users', A.user.uid, name);
+
+    function onSnapErr(e) {
+        console.error(e);
+        if (e && e.code === 'permission-denied') showFatal('ไม่มีสิทธิ์เข้าถึงฐานข้อมูล', 'กรุณาตั้งค่า Firestore Rules ตามคู่มือ (ไฟล์ firestore.rules)');
+        else showFatal('เชื่อมต่อฐานข้อมูลไม่ได้', esc(errInfo(e)[0]));
+    }
+
+    function startListeners() {
+        listening = true;
+        const { fsM } = fb;
+        const pending = new Set(['profile', 'goals', 'wishlist', 'notifications']);
+        const arrived = k => {
+            pending.delete(k);
+            if (pending.size) return;
+            if (!A.isReady) becomeReady(); else changed();
+        };
+        unsubs.push(fsM.onSnapshot(userDoc(), snap => {
+            const d = snap.exists() ? snap.data() : null;
+            A.profile = d || { name: A.user.displayName || '', email: A.user.email };
+            A.settings = { ...DEFAULT_SETTINGS, ...((d && d.settings) || {}) };
+            A.interests = (d && Array.isArray(d.interests)) ? d.interests : [];
+            if (!d) fsM.setDoc(userDoc(), { name: A.user.displayName || '', email: A.user.email, createdAt: nowISO(), settings: DEFAULT_SETTINGS, interests: [] }, { merge: true }).catch(onSnapErr);
+            arrived('profile');
+        }, onSnapErr));
+        const col = (name, set) => unsubs.push(fsM.onSnapshot(subCol(name), snap => {
+            const arr = []; snap.forEach(doc => arr.push({ ...doc.data(), id: doc.id })); set(arr); arrived(name);
+        }, onSnapErr));
+        col('goals', arr => { A.goals = arr.sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''))); });
+        col('wishlist', arr => { A.wishlist = arr; });
+        col('notifications', arr => { A.notifications = arr.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))); });
+    }
+
+    function becomeReady() {
+        A.isReady = true;
+        const run = () => {
+            hideLoader();
+            decorateSidebar();
+            setupBell();
+            readyCbs.splice(0).forEach(cb => { try { cb(A); } catch (e) { console.error(e); } });
+            renderBell();
+            generateSoon();
+        };
+        document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', run) : run();
+    }
+    function changed() {
+        changeCbs.forEach(cb => { try { cb(A); } catch (e) { console.error(e); } });
+        renderBell(); renderPanel(); decorateSidebar(); generateSoon();
+    }
+
+    // ---------- auth actions ----------
+    A.register = async ({ name, email, password }) => {
+        try {
+            await booted;
+            const { authM, fsM } = fb;
+            const cred = await authM.createUserWithEmailAndPassword(fb.auth, email.trim(), password);
+            A.user = cred.user;
+            await authM.updateProfile(cred.user, { displayName: name.trim() });
+            await fsM.setDoc(userDoc(), { name: name.trim(), email: cred.user.email, createdAt: nowISO(), settings: DEFAULT_SETTINGS, interests: [] });
+            await fsM.setDoc(sub('notifications', 'welcome'), { type: 'welcome', title: `ยินดีต้อนรับ ${name.trim()}! 🐷`, body: 'เริ่มจากตั้งเป้าหมายสิ่งที่อยากได้ แล้วให้แชทบอทช่วยจัดตารางออมเงินให้นะ', link: 'add-goal.html', read: false, createdAt: nowISO() });
+            rememberEmail(cred.user.email);
+            return { ok: true };
+        } catch (e) { const [error, field] = errInfo(e); return { error, field }; }
+    };
+    A.login = async (email, password) => {
+        try {
+            await booted;
+            const cred = await fb.authM.signInWithEmailAndPassword(fb.auth, email.trim(), password);
+            rememberEmail(cred.user.email);
+            return { ok: true };
+        } catch (e) { const [error, field] = errInfo(e); return { error, field }; }
+    };
+    A.resetPassword = async email => {
+        try { await booted; await fb.authM.sendPasswordResetEmail(fb.auth, email.trim()); return { ok: true }; }
+        catch (e) { const [error, field] = errInfo(e); return { error, field }; }
+    };
+    A.logout = async () => { await booted; await fb.authM.signOut(fb.auth); location.replace('login.html'); };
+
+    async function reauth(currentPassword) {
+        const { authM } = fb;
+        await authM.reauthenticateWithCredential(fb.auth.currentUser, authM.EmailAuthProvider.credential(fb.auth.currentUser.email, currentPassword));
+    }
+    A.changePassword = async (currentPassword, newPassword) => {
+        try { await booted; await reauth(currentPassword); await fb.authM.updatePassword(fb.auth.currentUser, newPassword); return { ok: true }; }
+        catch (e) { const [error, field] = errInfo(e); return { error, field }; }
+    };
+    A.deleteAccount = async currentPassword => {
+        try {
+            await booted; await reauth(currentPassword);
+            const { fsM } = fb;
+            unsubs.forEach(u => u()); unsubs = [];
+            for (const name of ['goals', 'wishlist', 'notifications']) {
+                const snap = await fsM.getDocs(subCol(name));
+                const ids = []; snap.forEach(d => ids.push(d.id));
+                await Promise.all(ids.map(id => fsM.deleteDoc(sub(name, id))));
+            }
+            await fsM.deleteDoc(userDoc());
+            await fb.authM.deleteUser(fb.auth.currentUser);
+            return { ok: true };
+        } catch (e) { const [error, field] = errInfo(e); return { error, field }; }
+    };
+
+    // ---------- data actions ----------
+    const w = fn => async (...args) => { await booted; try { return await fn(...args); } catch (e) { console.error(e); throw Object.assign(new Error(errInfo(e)[0]), { code: e.code }); } };
+    A.saveGoal = w(g => fb.fsM.setDoc(sub('goals', g.id), clean({ ...g, updatedAt: nowISO() })));
+    A.deleteGoal = w(id => fb.fsM.deleteDoc(sub('goals', id)));
+    A.deleteAllGoals = w(() => Promise.all(A.goals.map(g => fb.fsM.deleteDoc(sub('goals', g.id)))));
+    A.saveWish = w(item => fb.fsM.setDoc(sub('wishlist', item.id), clean(item)));
+    A.deleteWish = w(id => fb.fsM.deleteDoc(sub('wishlist', id)));
+    A.setInterests = w(arr => fb.fsM.setDoc(userDoc(), { interests: arr }, { merge: true }));
+    A.updateSettings = w(partial => fb.fsM.setDoc(userDoc(), { settings: partial }, { merge: true }));
+    // รูปโปรไฟล์ (เก็บเป็นรูปย่อขนาดเล็กใน users/{uid}.photo)
+    A.photo = () => (A.profile && A.profile.photo) || null;
+    A.updatePhoto = w(photo => fb.fsM.setDoc(userDoc(), { photo: photo || null }, { merge: true }));
+
+    // ย่อ + ครอปรูปเป็นสี่เหลี่ยมจัตุรัส แล้วแปลงเป็น JPEG ขนาดเล็ก (ใช้ได้กับไฟล์จากคอมและมือถือ)
+    A.resizeImage = (file, size = 480) => new Promise((resolve, reject) => {
+        if (!file) return reject(new Error('ไม่ได้เลือกไฟล์'));
+        if (file.type && !/^image\//.test(file.type)) return reject(new Error('กรุณาเลือกไฟล์รูปภาพ'));
+        if (file.size > 20 * 1024 * 1024) return reject(new Error('ไฟล์ใหญ่เกินไป (ไม่เกิน 20MB)'));
+        const url = URL.createObjectURL(file), img = new Image();
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            const s = Math.min(img.naturalWidth, img.naturalHeight);
+            const sx = (img.naturalWidth - s) / 2, sy = (img.naturalHeight - s) / 2, out = Math.min(size, s);
+            const c = document.createElement('canvas'); c.width = c.height = out;
+            const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, out, out);
+            ctx.drawImage(img, sx, sy, s, s, 0, 0, out, out);
+            let q = 0.85, data = c.toDataURL('image/jpeg', q);
+            while (data.length > 200000 && q > 0.4) { q -= 0.15; data = c.toDataURL('image/jpeg', q); }
+            resolve(data);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('เปิดไฟล์รูปนี้ไม่ได้ ลองใช้รูป JPG หรือ PNG')); };
+        img.src = url;
+    });
+
+    A.updateName = w(async name => {
+        await fb.fsM.setDoc(userDoc(), { name }, { merge: true });
+        await fb.authM.updateProfile(fb.auth.currentUser, { displayName: name });
+    });
+
+    // ---------- notifications ----------
+    const inFlight = new Set();
+    A.notify = w(async (id, n) => {
+        if (inFlight.has(id) || A.notifications.some(x => x.id === id)) return false;
+        inFlight.add(id);
+        try { await fb.fsM.setDoc(sub('notifications', id), clean({ read: false, createdAt: nowISO(), link: '', ...n })); }
+        finally { setTimeout(() => inFlight.delete(id), 3000); }
+        if (A.settings.browserNotif && ['due', 'missed', 'reached', 'afford'].includes(n.type)) browserNotify(n);
+        return true;
+    });
+    A.markRead = w(id => fb.fsM.setDoc(sub('notifications', id), { read: true }, { merge: true }));
+    A.markAllRead = w(() => Promise.all(A.notifications.filter(n => !n.read).map(n => fb.fsM.setDoc(sub('notifications', n.id), { read: true }, { merge: true }))));
+    A.clearNotifications = w(() => Promise.all(A.notifications.map(n => fb.fsM.deleteDoc(sub('notifications', n.id)))));
+    A.unreadCount = () => A.notifications.filter(n => !n.read).length;
+
+    function browserNotify(n) {
+        try {
+            if (!('Notification' in window) || Notification.permission !== 'granted') return;
+            const x = new Notification(n.title, { body: n.body, tag: n.type });
+            x.onclick = () => { window.focus(); if (n.link) location.href = n.link; };
+        } catch (e) { }
+    }
+
+    // สร้างการแจ้งเตือนอัตโนมัติจากข้อมูล (ใช้ id คงที่ จึงไม่ซ้ำ)
+    let genTimer = null;
+    function generateSoon() { clearTimeout(genTimer); genTimer = setTimeout(generate, 400); }
+    function generate() {
+        if (!A.isReady || !A.user) return;
+        const s = A.settings, today = new Date(), tkey = dkey(today);
+        A.goals.forEach(g => {
+            const items = g.schedule || [];
+            const it = items.find(i => i.date === tkey);
+            const dueId = `due_${g.id}_${tkey}`;
+            if (s.notifyDue && it && !it.saved) A.notify(dueId, { type: 'due', title: 'ถึงเวลาออมแล้ว 🐷', body: `วันนี้ออม ${money(it.amount)} ฿ สำหรับ "${g.title}"`, link: 'dashboard.html' }).catch(() => { });
+            const dn = A.notifications.find(n => n.id === dueId);
+            if (dn && !dn.read && it && it.saved) A.markRead(dueId).catch(() => { });
+            if (s.notifyMissed) for (let k = 1; k <= 3; k++) {
+                const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - k), key = dkey(d);
+                const m = items.find(i => i.date === key);
+                if (m && !m.saved) A.notify(`missed_${g.id}_${key}`, { type: 'missed', title: 'พลาดการออม 😔', body: `วันที่ ${d.getDate()}/${d.getMonth() + 1} ยังไม่ได้ออม ${money(m.amount)} ฿ ("${g.title}") ติ๊กย้อนหลังได้นะ`, link: 'dashboard.html' }).catch(() => { });
+            }
+            if (s.notifyGoal && g.target > 0 && savedOf(g) >= g.target - 0.001)
+                A.notify(`reached_${g.id}`, { type: 'reached', title: 'ถึงเป้าหมายแล้ว! 🎉', body: `คุณออมครบ ${money(g.target)} ฿ สำหรับ "${g.title}" แล้ว เก่งมาก!`, link: 'dashboard.html' }).catch(() => { });
+        });
+        if (s.notifyWish) {
+            const total = A.totalSavings();
+            A.wishlist.forEach(x => {
+                if (total > 0 && total >= x.price) A.notify(`afford_${x.id}`, { type: 'afford', title: 'ซื้อได้แล้ว! 🛍️', body: `เงินออม ${money(total)} ฿ พอสำหรับ "${x.name}" (${(+x.price).toLocaleString('th-TH')} ฿) แล้ว`, link: 'dashboard.html' }).catch(() => { });
+            });
+        }
+    }
+
+    // ---------- UI: sidebar ----------
+    function decorateSidebar() {
+        const sb = document.getElementById('sidebar'); if (!sb) return;
+        const links = [...sb.querySelectorAll('nav a')];
+        const acc = links.find(a => a.dataset.account || a.textContent.includes('บัญชีของฉัน'));
+        if (acc) {
+            acc.dataset.account = '1'; acc.href = 'settings.html';
+            const photo = A.photo(), cur = acc.querySelector('i, img');
+            if (cur && (cur.tagName === 'IMG') !== !!photo || (photo && cur && cur.getAttribute('src') !== photo)) {
+                const el = photo ? Object.assign(document.createElement('img'), { src: photo, alt: '', className: 'w-8 h-8 rounded-full object-cover shrink-0' })
+                    : Object.assign(document.createElement('i'), { className: 'fa-solid fa-circle-user text-2xl text-black' });
+                cur.replaceWith(el);
+            }
+            const span = acc.querySelector('span');
+            if (span) span.innerHTML = `${esc(A.displayName())}<span class="block text-[11px] font-normal text-gray-500 truncate max-w-[150px]">${esc(A.user.email)}</span>`;
+        }
+        const set = links.find(a => a.textContent.trim() === 'ตั้งค่า'); if (set) set.href = 'settings.html';
+        const nav = sb.querySelector('nav');
+        if (nav && !document.getElementById('logoutLink')) {
+            const a = document.createElement('a');
+            a.href = '#'; a.id = 'logoutLink';
+            a.className = 'flex items-center gap-4 px-6 py-5 text-red-500 font-bold hover:bg-red-50 border-b border-gray-200';
+            a.innerHTML = '<i class="fa-solid fa-right-from-bracket text-2xl"></i><span>ออกจากระบบ</span>';
+            a.addEventListener('click', e => { e.preventDefault(); if (confirm('ต้องการออกจากระบบใช่ไหม?')) A.logout(); });
+            nav.append(a);
+        }
+    }
+
+    // ---------- UI: bell + notification panel ----------
+    const ICON = {
+        due: ['fa-piggy-bank', 'bg-amber-100 text-amber-600'], missed: ['fa-face-frown', 'bg-rose-100 text-rose-500'],
+        reached: ['fa-trophy', 'bg-yellow-100 text-yellow-600'], afford: ['fa-bag-shopping', 'bg-green-100 text-green-600'],
+        plan: ['fa-calendar-check', 'bg-sky-100 text-sky-600'], wish: ['fa-star', 'bg-violet-100 text-violet-500'],
+        welcome: ['fa-hand-sparkles', 'bg-[#f4efe9] text-[#9c8a7e]']
+    };
+    function ago(iso) {
+        const t = new Date(iso), s = (Date.now() - t) / 1000;
+        if (s < 60) return 'เมื่อสักครู่';
+        if (s < 3600) return `${Math.floor(s / 60)} นาทีที่แล้ว`;
+        if (s < 86400) return `${Math.floor(s / 3600)} ชั่วโมงที่แล้ว`;
+        if (s < 86400 * 7) return `${Math.floor(s / 86400)} วันที่แล้ว`;
+        return t.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+    }
+    let bellReady = false;
+    function setupBell() {
+        if (bellReady) return;
+        let btn = document.getElementById('bellBtn');
+        if (!btn) {
+            const icon = document.querySelector('.fa-bell'); if (!icon) return;
+            btn = icon.closest('button,div'); btn.id = 'bellBtn';
+        }
+        bellReady = true;
+        btn.style.cursor = 'pointer'; btn.classList.add('relative');
+        btn.setAttribute('aria-label', 'การแจ้งเตือน');
+        if (!document.getElementById('bellBadge')) {
+            const b = document.createElement('span'); b.id = 'bellBadge';
+            b.className = 'hidden absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 items-center justify-center';
+            btn.appendChild(b);
+        }
+        const wrap = document.createElement('div');
+        wrap.innerHTML = `<div id="notifBackdrop" class="hidden fixed inset-0 z-[55]"></div>
+            <div id="notifPanel" class="hidden fixed top-[68px] right-2 left-2 sm:left-auto sm:w-96 z-[60] bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden">
+                <div class="flex items-center justify-between px-5 py-3 border-b-2 border-[#9c8a7e] mx-3">
+                    <h3 class="font-bold text-[#9c8a7e] text-lg">การแจ้งเตือน</h3>
+                    <button id="notifReadAll" class="text-xs text-gray-500 hover:text-[#9c8a7e] font-semibold">อ่านทั้งหมด</button>
+                </div>
+                <div id="notifList" class="max-h-[60vh] overflow-y-auto px-3 py-2"></div>
+                <a href="settings.html#notifications" class="block text-center text-xs text-gray-500 py-3 border-t border-gray-100 hover:text-[#9c8a7e]"><i class="fa-solid fa-gear mr-1"></i>ตั้งค่าการแจ้งเตือน</a>
+            </div>`;
+        document.body.append(...wrap.children);
+        const panel = document.getElementById('notifPanel'), bd = document.getElementById('notifBackdrop');
+        const toggle = open => { panel.classList.toggle('hidden', !open); bd.classList.toggle('hidden', !open); if (open) renderPanel(); };
+        btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); toggle(panel.classList.contains('hidden')); });
+        bd.addEventListener('click', () => toggle(false));
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') toggle(false); });
+        document.getElementById('notifReadAll').addEventListener('click', () => A.markAllRead().catch(() => { }));
+        document.getElementById('notifList').addEventListener('click', e => {
+            const item = e.target.closest('[data-nid]'); if (!item) return;
+            const n = A.notifications.find(x => x.id === item.dataset.nid); if (!n) return;
+            const go = () => { if (n.link && !location.pathname.endsWith(n.link)) location.href = n.link; else toggle(false); };
+            if (!n.read) A.markRead(n.id).then(go, go); else go();
+        });
+    }
+    function renderBell() {
+        const b = document.getElementById('bellBadge'); if (!b) return;
+        const n = A.unreadCount();
+        b.textContent = n > 9 ? '9+' : n;
+        b.classList.toggle('hidden', !n); b.classList.toggle('flex', !!n);
+    }
+    function renderPanel() {
+        const list = document.getElementById('notifList'); if (!list) return;
+        const all = A.notifications.slice(0, 50);
+        document.getElementById('notifReadAll').classList.toggle('invisible', !A.unreadCount());
+        if (!all.length) {
+            list.innerHTML = '<div class="text-center py-10 text-gray-400"><i class="fa-regular fa-bell-slash text-4xl mb-2"></i><p class="text-sm">ยังไม่มีการแจ้งเตือน</p></div>';
+            return;
+        }
+        list.innerHTML = all.map(n => {
+            const [icon, cls] = ICON[n.type] || ['fa-bell', 'bg-gray-100 text-gray-500'];
+            return `<button data-nid="${esc(n.id)}" class="w-full text-left flex gap-3 items-start p-3 rounded-2xl hover:bg-[#fdf3e7] ${n.read ? '' : 'bg-[#fdf3e7]/60'}">
+                <div class="w-10 h-10 rounded-full shrink-0 flex items-center justify-center ${cls}"><i class="fa-solid ${icon}"></i></div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm ${n.read ? 'font-medium text-gray-600' : 'font-bold text-gray-800'}">${esc(n.title)}</p>
+                    <p class="text-xs text-gray-500 leading-snug">${esc(n.body)}</p>
+                    <p class="text-[10px] text-gray-400 mt-0.5">${ago(n.createdAt)}</p>
+                </div>
+                ${n.read ? '' : '<span class="w-2.5 h-2.5 bg-red-500 rounded-full mt-1.5 shrink-0"></span>'}
+            </button>`;
+        }).join('');
+    }
+})();

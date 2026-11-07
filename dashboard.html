@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AOMSUK - ติดตาม</title>
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+        ::-webkit-scrollbar { display: none; }
+        * { scrollbar-width: none; }
+        /* สไตล์สำหรับกล่องเป้าหมายแบบมีเส้นโค้ง */
+        .goal-container {
+            background-color: white;
+            border-radius: 2rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .goal-header {
+            border-bottom: 2px solid #9c8a7e;
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        .toast-in { animation: toastIn .3s ease-out; }
+        @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    </style>
+</head>
+<body class="bg-[#d8eafe] min-h-screen flex flex-col relative overflow-x-hidden">
+
+    <!-- Header ด้านบน -->
+    <div class="bg-[#9c8a7e] p-4 flex justify-between items-center shadow-md sticky top-0 z-30">
+        <button onclick="toggleMenu()" class="text-white text-2xl focus:outline-none">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+        <h1 class="text-2xl font-bold text-white tracking-widest">AOMSUK</h1>
+        <button id="bellBtn" class="text-yellow-400 text-2xl relative focus:outline-none" aria-label="แจ้งเตือน">
+            <i class="fa-solid fa-bell"></i>
+            <span id="bellBadge" class="hidden absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center"></span>
+        </button>
+    </div>
+
+    <!-- Backdrop สำหรับ Sidebar -->
+    <div id="backdrop" onclick="toggleMenu()" class="fixed inset-0 bg-black/40 z-40 hidden transition-opacity"></div>
+
+    <!-- Sidebar Menu ด้านซ้าย -->
+    <div id="sidebar" class="fixed top-0 left-0 h-full w-64 bg-white z-50 shadow-2xl transform -translate-x-full transition-transform duration-300 ease-in-out flex flex-col pt-16">
+        <nav class="flex-1">
+            <a href="settings.html" class="flex items-center gap-4 px-6 py-5 text-gray-800 font-bold hover:bg-gray-50 border-b border-gray-200">
+                <i class="fa-solid fa-circle-user text-2xl text-black"></i>
+                <span>บัญชีของฉัน</span>
+            </a>
+            <a href="dashboard.html" class="flex items-center gap-4 px-6 py-5 text-gray-800 font-bold bg-gray-100 border-l-4 border-[#9c8a7e] border-b border-gray-200">
+                <i class="fa-solid fa-paw text-2xl text-black"></i>
+                <span>ติดตาม</span>
+            </a>
+            <a href="chat.html" class="flex items-center gap-4 px-6 py-5 text-gray-800 font-bold hover:bg-gray-50 border-b border-gray-200">
+                <i class="fa-solid fa-comment-dots text-2xl text-black"></i>
+                <span>แชทบอท</span>
+            </a>
+            <a href="settings.html" class="flex items-center gap-4 px-6 py-5 text-gray-800 font-bold hover:bg-gray-50 border-b border-gray-200">
+                <i class="fa-solid fa-gear text-2xl text-black"></i>
+                <span>ตั้งค่า</span>
+            </a>
+        </nav>
+    </div>
+
+    <!-- Content เนื้อหาหน้าติดตาม -->
+    <div class="flex-1 px-4 pt-5 pb-20 space-y-4">
+
+        <!-- เงินออมปัจจุบัน -->
+        <div class="bg-white rounded-3xl p-6 shadow-sm flex justify-between items-center relative">
+            <div class="text-center w-full">
+                <p class="text-gray-600 font-medium text-sm">เงินออมปัจจุบัน</p>
+                <h2 id="currentSavings" class="text-2xl font-bold text-gray-800">0.00 BATH</h2>
+            </div>
+            <a href="settings.html#profile" class="absolute right-4 top-[-20px] text-center" aria-label="โปรไฟล์">
+                <div id="avatarCircle" class="w-12 h-12 bg-gray-200 rounded-full border-4 border-white shadow-sm flex items-center justify-center overflow-hidden">
+                    <i class="fa-solid fa-cat text-[#9c8a7e]"></i>
+                </div>
+                <p id="avatarName" class="text-[10px] text-gray-500 font-medium mt-1 max-w-[64px] truncate">PEAK</p>
+            </a>
+        </div>
+
+        <!-- แผนการออม (จากแชทบอท) -->
+        <div id="planSection" class="bg-white rounded-3xl p-4 shadow-sm space-y-3"></div>
+
+        <!-- กล่องตารางออมเงิน & รายการออม -->
+        <div class="grid grid-cols-2 gap-3">
+            <!-- ตารางออมเงิน -->
+            <div id="scheduleBox" class="bg-[#9c8a7e] rounded-3xl p-4 text-white shadow-sm border-4 border-[#9c8a7e] scroll-mt-20">
+                <h3 class="font-bold text-center mb-3 text-sm">ตารางออมเงิน</h3>
+                <div id="scheduleList" class="space-y-2 text-sm bg-white text-gray-800 p-3 rounded-2xl max-h-64 overflow-y-auto"></div>
+            </div>
+
+            <!-- รายการออม -->
+            <div class="bg-[#fcefdc] rounded-3xl p-4 text-gray-800 shadow-sm border-4 border-[#fcefdc]">
+                <h3 class="font-bold text-center mb-3 text-sm">รายการออม</h3>
+                <div id="historyList" class="space-y-2 text-xs bg-[#fdf3e6] p-3 rounded-2xl max-h-64 overflow-y-auto"></div>
+            </div>
+        </div>
+
+        <!-- เป้าหมายของคุณ (หน้าหลัก) -->
+        <div class="goal-container">
+            <div class="goal-header">
+                <h3 class="font-bold text-[#9c8a7e] text-lg">เป้าหมายของคุณ</h3>
+            </div>
+            <div class="text-right text-xs text-gray-500 mb-2">highest price</div>
+            <div id="wishTop" class="space-y-4"></div>
+            <div id="moreBtnWrap" class="text-center mt-6">
+                <button onclick="openGoalPopup()" class="font-bold text-gray-600 text-sm underline decoration-2 underline-offset-4 hover:text-gray-800 transition-colors">
+                    เพิ่มเติม.....
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ปุ่มเพิ่มเป้าหมาย (ลอยอยู่มุมขวาล่าง) -->
+    <div class="fixed bottom-6 right-6 z-20">
+        <a href="add-goal.html" class="bg-[#7b8994] text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 font-bold text-sm hover:bg-[#637079] transition-colors">
+            <i class="fa-solid fa-square-plus text-lg"></i>
+            เพิ่มเป้าหมาย
+        </a>
+    </div>
+
+    <!-- POPUP (Modal) รายการเป้าหมายทั้งหมด -->
+    <div id="goalPopup" class="fixed inset-0 bg-black/50 z-50 hidden flex flex-col items-center justify-center p-4">
+        <div class="bg-white rounded-[2rem] w-full max-w-md overflow-hidden relative shadow-2xl">
+            <div class="flex items-center p-4 border-b-2 border-[#9c8a7e] mx-4 mb-2">
+                <button onclick="closeGoalPopup()" class="text-2xl text-gray-600 focus:outline-none">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+                <h3 class="flex-1 text-center font-bold text-[#9c8a7e] text-lg mr-6">เป้าหมายของคุณ</h3>
+            </div>
+            <div class="px-6 pb-6 pt-2 text-right text-xs text-gray-500 mb-1">highest price</div>
+            <div id="wishAll" class="px-6 pb-8 space-y-5 overflow-y-auto max-h-[60vh]"></div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="hidden fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-gray-800/90 text-white text-sm px-4 py-2 rounded-full shadow-lg whitespace-nowrap"></div>
+
+    <script>
+        // ---------------- Sidebar & Popup ----------------
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('-translate-x-full');
+            document.getElementById('backdrop').classList.toggle('hidden');
+        }
+        function openGoalPopup() { document.getElementById('goalPopup').classList.remove('hidden'); }
+        function closeGoalPopup() { document.getElementById('goalPopup').classList.add('hidden'); }
+        document.getElementById('goalPopup').addEventListener('click', e => { if (e.target.id === 'goalPopup') closeGoalPopup(); });
+
+        // ---------------- ข้อมูลมาจาก Firebase ผ่าน app.js ----------------
+        //   AOMSUK.goals    : แผนการออม (จากแชทบอท)
+        //   AOMSUK.wishlist : เป้าหมายสิ่งที่อยากซื้อ (จากหน้าเพิ่มเป้าหมาย)
+        const A = AOMSUK;
+        const ACTIVE_KEY = 'aomsuk_active_goal';
+        let activeId = null;
+        try { activeId = localStorage.getItem(ACTIVE_KEY); } catch (e) { }
+        const setActive = id => { activeId = id; try { localStorage.setItem(ACTIVE_KEY, id || ''); } catch (e) { } };
+
+        // ---------------- Helpers ----------------
+        const esc = A.esc, money = A.money, savedOf = A.savedOf;
+        const parseKey = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+        const pad = n => String(n).padStart(2, '0');
+        const todayKey = A.dkey(new Date());
+        const thShort = d => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${pad((d.getFullYear() + 543) % 100)}`;
+        const weekdayShort = d => d.toLocaleDateString('th-TH', { weekday: 'short' });
+        const FREQ = { daily: 'รายวัน', weekly: 'รายสัปดาห์', monthly: 'รายเดือน' };
+        const activeGoal = () => A.goals.find(g => g.id === activeId) || A.goals[A.goals.length - 1] || null;
+
+        function toast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg; t.classList.remove('hidden'); t.classList.remove('toast-in'); void t.offsetWidth; t.classList.add('toast-in');
+            clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), 2200);
+        }
+
+        // ---------------- Render: เงินออมปัจจุบัน ----------------
+        function renderSavings() {
+            document.getElementById('currentSavings').textContent = `${money(A.totalSavings())} BATH`;
+            document.getElementById('avatarName').textContent = A.displayName().toUpperCase();
+            const photo = A.photo(), circle = document.getElementById('avatarCircle');
+            const want = photo ? `<img src="${photo}" alt="" class="w-full h-full object-cover">` : '<i class="fa-solid fa-cat text-[#9c8a7e]"></i>';
+            if (circle.dataset.photo !== (photo || '')) { circle.innerHTML = want; circle.dataset.photo = photo || ''; }
+        }
+
+        // ---------------- Render: แผนการออม ----------------
+        function renderPlan() {
+            const el = document.getElementById('planSection');
+            const g = activeGoal();
+            if (!g) {
+                el.innerHTML = `<div class="text-center py-2">
+                    <p class="text-gray-600 text-sm mb-3">ยังไม่มีแผนการออมเลย ให้แชทบอทช่วยจัดตารางให้สิ 🐷</p>
+                    <a href="chat.html" class="inline-flex items-center gap-2 bg-[#9c8a7e] text-white text-sm font-bold px-4 py-2 rounded-full"><i class="fa-solid fa-comment-dots"></i> สร้างแผนกับแชทบอท</a>
+                </div>`;
+                return;
+            }
+            const saved = savedOf(g), pct = Math.min(100, Math.round(saved / g.target * 100));
+            const done = g.schedule.filter(i => i.saved).length;
+            const left = g.schedule.filter(i => !i.saved && i.date >= todayKey).length;
+            const missed = g.schedule.filter(i => !i.saved && i.date < todayKey).length;
+            const pills = A.goals.length > 1 ? `<div class="flex gap-2 overflow-x-auto pb-1">${A.goals.map(x => `
+                <button data-goal="${esc(x.id)}" class="shrink-0 text-xs px-3 py-1 rounded-full border ${x.id === g.id ? 'bg-[#9c8a7e] text-white border-[#9c8a7e]' : 'bg-white text-[#7a6a5f] border-[#d9cfc7]'}">${esc(x.title)}</button>`).join('')}</div>` : '';
+            el.innerHTML = `${pills}
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <p class="font-bold text-gray-800">${esc(g.title)}</p>
+                        <p class="text-[11px] text-gray-500">${FREQ[g.frequency] || ''} · ${thShort(parseKey(g.startDate))} – ${thShort(parseKey(g.endDate))}</p>
+                    </div>
+                    <button data-del="${esc(g.id)}" class="text-gray-400 hover:text-red-500 text-sm px-1" aria-label="ลบแผน"><i class="fa-solid fa-trash-can"></i></button>
+                </div>
+                <div>
+                    <div class="flex justify-between text-xs mb-1"><span class="text-gray-600">${money(saved)} / ${money(g.target)} ฿</span><span class="font-bold text-[#9c8a7e]">${pct}%</span></div>
+                    <div class="h-3 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-[#9c8a7e] rounded-full transition-all duration-500" style="width:${pct}%"></div></div>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-center text-[11px]">
+                    <div class="bg-[#f4efe9] rounded-xl py-1.5"><div class="font-bold text-sm text-gray-800">${done}</div>ออมแล้ว</div>
+                    <div class="bg-[#f4efe9] rounded-xl py-1.5"><div class="font-bold text-sm text-gray-800">${left}</div>เหลืออีก</div>
+                    <div class="bg-[#f4efe9] rounded-xl py-1.5"><div class="font-bold text-sm ${missed ? 'text-[#cc9c94]' : 'text-gray-800'}">${missed}</div>พลาดไป</div>
+                </div>
+                ${pct >= 100 ? '<p class="text-center text-sm font-bold text-green-600">🎉 ถึงเป้าหมายแล้ว เก่งมาก!</p>' : ''}`;
+        }
+
+        // ---------------- Render: ตารางออมเงิน ----------------
+        let lastScrolledGoal = null;
+        function renderSchedule() {
+            const el = document.getElementById('scheduleList');
+            const g = activeGoal();
+            if (!g) { el.innerHTML = '<p class="text-center text-xs text-gray-500 py-4">ยังไม่มีตาราง</p>'; return; }
+            const keepScroll = el.scrollTop;
+            el.innerHTML = g.schedule.map((it, i) => {
+                const d = parseKey(it.date), isToday = it.date === todayKey, past = it.date < todayKey;
+                const icon = it.saved ? 'fa-solid fa-square-check text-[#9c8a7e]' : past ? 'fa-regular fa-square text-[#cc9c94]' : 'fa-solid fa-square text-gray-400';
+                return `<div data-idx="${i}" class="flex justify-between items-center gap-1 ${i < g.schedule.length - 1 ? 'border-b border-gray-200 pb-1' : ''} ${isToday ? 'bg-yellow-50 -mx-1 px-1 rounded' : ''}">
+                    <span class="font-bold text-xs leading-tight">${weekdayShort(d)} ${d.getDate()}/${d.getMonth() + 1}${isToday ? '<br><span class="text-[9px] text-yellow-600">วันนี้</span>' : ''}</span>
+                    <button data-tick="${i}" class="font-bold text-xs text-[#6b7280] whitespace-nowrap">${money(it.amount)} ฿ <i class="${icon}"></i></button>
+                </div>`;
+            }).join('');
+            if (lastScrolledGoal === g.id) { el.scrollTop = keepScroll; return; }
+            lastScrolledGoal = g.id;
+            // เลื่อนไปยังวันนี้ / รายการที่ยังไม่ออม
+            const idx = Math.max(0, g.schedule.findIndex(it => it.date >= todayKey || !it.saved));
+            const row = el.querySelector(`[data-idx="${idx}"]`);
+            if (row) el.scrollTop = row.offsetTop - el.offsetTop - 8;
+        }
+
+        // ---------------- Render: รายการออม (ประวัติ) ----------------
+        function renderHistory() {
+            const el = document.getElementById('historyList');
+            const rows = [];
+            A.goals.forEach(g => g.schedule.forEach(it => {
+                if (it.saved) {
+                    const at = it.savedAt ? new Date(it.savedAt) : parseKey(it.date);
+                    const late = it.savedAt && A.dkey(at) > it.date;
+                    rows.push({ sort: at.getTime(), emoji: late ? '😉' : '😁', date: thShort(at), time: it.savedAt ? `${pad(at.getHours())}:${pad(at.getMinutes())}` : '-', amount: it.amount });
+                } else if (it.date < todayKey) {
+                    const d = parseKey(it.date);
+                    rows.push({ sort: d.getTime() + 86399000, emoji: '😔', date: thShort(d), time: 'not found', amount: 0 });
+                }
+            }));
+            rows.sort((a, b) => b.sort - a.sort);
+            if (!rows.length) { el.innerHTML = '<p class="text-center text-gray-500 py-4">ยังไม่มีรายการ<br>ติ๊กช่องในตารางเมื่อออมแล้ว</p>'; return; }
+            el.innerHTML = rows.slice(0, 30).map((r, i, arr) => `
+                <div class="flex justify-between items-center ${i < arr.length - 1 ? 'border-b border-gray-300 pb-2' : ''}">
+                    <div class="flex items-center gap-1.5 min-w-0"><span class="text-lg">${r.emoji}</span><div><p class="font-bold text-gray-700 text-[11px]">${r.date}</p><p class="text-[9px] text-gray-500">${r.time}</p></div></div>
+                    <span class="font-bold text-xs text-gray-800 whitespace-nowrap ml-1">${money(r.amount)} ฿</span>
+                </div>`).join('');
+        }
+
+        // ---------------- Render: เป้าหมายของคุณ (wishlist) ----------------
+        function wishRow(w, withStatus) {
+            const need = Math.max(0, w.price - A.totalSavings());
+            const status = need > 0
+                ? `<div class="text-[10px] text-[#cc9c94]">คุณยังขาดอีก ${need.toLocaleString('th-TH', { maximumFractionDigits: 2 })} บาท</div>`
+                : `<div class="text-[10px] text-gray-500">คุณสามารถซื้อสินค้านี้ได้!</div>`;
+            return `<div class="flex justify-between items-center">
+                <div class="flex items-center gap-3 min-w-0">${w.image
+                    ? `<img src="${w.image}" alt="" class="w-10 h-10 rounded-xl object-cover shrink-0">`
+                    : `<span class="text-2xl w-10 text-center shrink-0">${esc(w.emoji || '🎯')}</span>`}<span class="font-bold text-gray-700 text-sm truncate">${esc(w.name)}</span></div>
+                ${withStatus ? `<div class="text-right"><div class="font-bold text-gray-700">${(+w.price).toLocaleString('th-TH')} THB</div>${status}</div>` : `<span class="font-bold text-gray-700">${(+w.price).toLocaleString('th-TH')} THB</span>`}
+            </div>`;
+        }
+        function renderWishlist() {
+            const sorted = [...A.wishlist].sort((a, b) => b.price - a.price);
+            const empty = `<div class="text-center py-2"><p class="text-sm text-gray-500 mb-2">ยังไม่มีเป้าหมาย</p><a href="add-goal.html" class="text-sm font-bold text-[#9c8a7e] underline">+ เพิ่มเป้าหมายแรก</a></div>`;
+            document.getElementById('wishTop').innerHTML = sorted.length ? sorted.slice(0, 2).map(w => wishRow(w, false)).join('') : empty;
+            document.getElementById('wishAll').innerHTML = sorted.length ? sorted.map(w => wishRow(w, true)).join('') : empty;
+            document.getElementById('moreBtnWrap').classList.toggle('hidden', !sorted.length);
+        }
+
+        // ---------------- Events ----------------
+        document.addEventListener('click', e => {
+            const tick = e.target.closest('[data-tick]');
+            if (tick) {
+                const g = activeGoal(), it = g.schedule[+tick.dataset.tick];
+                it.saved = !it.saved;
+                if (it.saved) it.savedAt = new Date().toISOString(); else delete it.savedAt;
+                g.savedAmount = Math.round(savedOf(g) * 100) / 100;
+                renderAll();
+                A.saveGoal(g).catch(err => toast('บันทึกไม่สำเร็จ: ' + err.message));
+                const pct = Math.round(savedOf(g) / g.target * 100);
+                toast(it.saved ? (pct >= 100 ? '🎉 ถึงเป้าหมายแล้ว เก่งมาก!' : `เก่งมาก! ออมแล้ว ${money(it.amount)} ฿ (${pct}%)`) : 'ยกเลิกการติ๊กแล้ว');
+                return;
+            }
+            const pill = e.target.closest('[data-goal]');
+            if (pill) { setActive(pill.dataset.goal); renderAll(); return; }
+            const del = e.target.closest('[data-del]');
+            if (del) {
+                const g = A.goals.find(x => x.id === del.dataset.del);
+                if (g && confirm(`ลบแผน "${g.title}" ใช่ไหม? ประวัติการออมของแผนนี้จะหายไปด้วย`)) {
+                    A.deleteGoal(g.id).then(() => toast('ลบแผนแล้ว'), err => toast('ลบไม่สำเร็จ: ' + err.message));
+                }
+            }
+        });
+
+        function renderAll() { renderSavings(); renderPlan(); renderSchedule(); renderHistory(); renderWishlist(); }
+        A.onReady(renderAll);
+        A.onChange(renderAll);
+    </script>
+</body>
+</html>

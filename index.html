@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AOMSUK</title>
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+        .pop { animation: pop .6s cubic-bezier(.2,1.4,.4,1) both; }
+        .fade-up { animation: fadeUp .6s .2s ease-out both; }
+        @keyframes pop { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    </style>
+</head>
+<body class="bg-[#d8eafe] h-screen flex flex-col justify-between">
+    <div class="h-16 bg-[#9c8a7e]"></div> <!-- แถบสีน้ำตาลบน -->
+    <div class="flex flex-col items-center justify-center">
+        <i class="fa-solid fa-piggy-bank text-white text-6xl mb-4 drop-shadow-md pop"></i>
+        <h1 class="text-4xl font-bold text-[#9c8a7e] tracking-widest fade-up">AOMSUK</h1>
+    </div>
+    <div class="h-16 bg-[#9c8a7e]"></div> <!-- แถบสีน้ำตาลล่าง -->
+
+    <!-- เด้งไปหน้าถัดไปภายใน 1.5 วินาที: ล็อกอินแล้ว -> ติดตาม, ยังไม่ล็อกอิน -> login -->
+    <script>
+        const t0 = Date.now();
+        AOMSUK.authState().then(user => {
+            const next = user ? 'dashboard.html' : 'login.html';
+            setTimeout(() => location.replace(next), Math.max(0, 1500 - (Date.now() - t0)));
+        });
+    </script>
+</body>
+</html>
