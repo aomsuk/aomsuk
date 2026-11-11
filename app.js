@@ -66,99 +66,6 @@
     };
     const rememberEmail = e => { try { localStorage.setItem('aomsuk_last_email', e); } catch (x) { } };
 
-    // =================================================================
-    // ธีมสี: เปลี่ยนสีทั้งเว็บ (ตั้งค่าได้ในหน้าตั้งค่า)
-    //   primary = แถบหัว/ปุ่มหลัก, card = กล่องตารางออม, soft = กล่องรายการออม/บับเบิลบอท
-    //   bg = พื้นหลัง, button = ปุ่มลอย "เพิ่มเป้าหมาย", avatar = วงกลมรูปโปรไฟล์
-    // =================================================================
-    const THEMES = {
-        classic: { name: 'ออมสุขคลาสสิก', primary: '#9c8a7e', card: '#9c8a7e', soft: '#fcefdc', bg: '#d8eafe', button: '#7b8994', avatar: '#e5e7eb' },
-        ocean: { name: 'ฟ้าคราม', primary: '#5581a6', card: '#7c9abe', soft: '#d2e3f5', bg: '#f5f5ed', button: '#5581a6', avatar: '#9b8b80' },
-        honey: { name: 'ทองน้ำผึ้ง', primary: '#dbaf70', card: '#dbd0bf', soft: '#fae3c6', bg: '#fcf8ef', button: '#dbd0c0', avatar: '#dbd0bf' },
-        grape: { name: 'ม่วงองุ่น', primary: '#b48aaf', card: '#d3a6ca', soft: '#ffd9e7', bg: '#fdf0da', button: '#b48aaf', avatar: '#b48aaf' },
-        lavender: { name: 'ลาเวนเดอร์', primary: '#ceb5dc', card: '#ffb9cb', soft: '#ffdae2', bg: '#f2ecf6', button: '#f6b7c7', avatar: '#ceb5dc' },
-        deepsea: { name: 'ทะเลลึก', primary: '#0d5b6a', card: '#59a2b1', soft: '#d2e3f5', bg: '#f1f2f6', button: '#0d5b6a', avatar: '#ff9d7b' },
-        sakura: { name: 'ชมพูซากุระ', primary: '#eea5b8', card: '#f6b7c7', soft: '#f8d3db', bg: '#fdf0f7', button: '#f6b7c7', avatar: '#f6b7c7' },
-        matcha: { name: 'เขียวมัทฉะ', primary: '#a5d6a7', card: '#a1dfa3', soft: '#bee1c9', bg: '#e9f7ea', button: '#a5d6a7', avatar: '#a5d6a7' },
-        chocomint: { name: 'ช็อกโกมินต์', primary: '#8f7971', card: '#8f7971', soft: '#dbf4ee', bg: '#b6e1d0', button: '#8f7971', avatar: '#885a4a' },
-        mono: { name: 'เทาโมโนโทน', primary: '#545454', card: '#545454', soft: '#d9d9d9', bg: '#a6a6a6', button: '#545454', avatar: '#545454' }
-    };
-    const hex2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
-    const rgb2hex = c => '#' + c.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
-    const mix = (a, b, t) => { const x = hex2rgb(a), y = hex2rgb(b); return rgb2hex(x.map((v, i) => v + (y[i] - v) * t)); };
-    const lum = h => { const [r, g, b] = hex2rgb(h).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
-    const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
-    const darkenFor = (c, bg, ratio) => { let out = c; for (let t = 0.08; contrast(out, bg) < ratio && t <= 0.9; t += 0.08) out = mix(c, '#000000', t); return out; };
-
-    function themeVars(th) {
-        return {
-            primary: th.primary, card: th.card, soft: th.soft, bg: th.bg, button: th.button, avatar: th.avatar,
-            'primary-dark': mix(th.primary, '#000000', 0.12),
-            'button-dark': mix(th.button, '#000000', 0.12),
-            accent: darkenFor(th.primary, '#ffffff', 3),          // ตัวหนังสือสีธีมบนพื้นขาว (อ่านง่าย)
-            ink: darkenFor(mix(th.primary, '#000000', 0.3), '#ffffff', 4.5),
-            tint: mix(th.primary, '#ffffff', 0.86),
-            input: mix(th.soft, '#ffffff', 0.45),
-            line: mix(th.primary, '#ffffff', 0.62),
-            'soft-light': mix(th.soft, '#ffffff', 0.4),
-            bubble: darkenFor(th.primary, '#ffffff', 2.6)        // บับเบิลข้อความผู้ใช้ (ตัวหนังสือขาว)
-        };
-    }
-
-    // แทนที่สีเดิมในคลาส Tailwind ด้วยสีของธีม (ใช้เฉพาะตอนเลือกธีมที่ไม่ใช่คลาสสิก)
-    function themeCSS() {
-        const MAP = {
-            '9c8a7e': { bg: 'primary', text: 'accent', border: 'primary', ring: 'primary' }, '8a7a6f': { bg: 'primary-dark' },
-            'f4efe9': { bg: 'tint' }, 'fdf3e7': { bg: 'input' }, '7a6a5f': { text: 'ink' }, 'd8eafe': { bg: 'bg' },
-            'fcefdc': { bg: 'soft', border: 'soft' }, 'd9cfc7': { border: 'line' }, 'e6d8c6': { border: 'line' },
-            'fdf3e6': { bg: 'soft-light' }, 'a3948b': { bg: 'bubble' }, '7b8994': { bg: 'button' }, '637079': { bg: 'button-dark' }
-        };
-        const PROP = { bg: 'background-color', text: 'color', border: 'border-color', ring: '--tw-ring-color' };
-        const e = s => s.replace(/[[\]#:/]/g, m => '\\' + m);
-        const rules = [];
-        for (const [hex, utils] of Object.entries(MAP))
-            for (const [u, v] of Object.entries(utils))
-                for (const [pre, ps] of [['', ''], ['hover:', ':hover'], ['focus:', ':focus']])
-                    rules.push(`html[data-theme] .${e(`${pre}${u}-[#${hex}]`)}${ps}{${PROP[u]}:var(--t-${v})!important}`);
-        rules.push(
-            `html[data-theme] .${e('bg-[#fdf3e7]/60')}{background-color:color-mix(in srgb,var(--t-input) 60%,transparent)!important}`,
-            'html[data-theme] #scheduleBox{background-color:var(--t-card)!important;border-color:var(--t-card)!important}',
-            'html[data-theme] #avatarCircle{background-color:var(--t-avatar)!important}',
-            'html[data-theme] #avatarCircle i{color:#fff!important}',
-            'html[data-theme] .goal-header{border-bottom-color:var(--t-primary)!important}',
-            'html[data-theme] .switch input:checked+span{background:var(--t-primary)!important}',
-            'html[data-theme] .dot{background:var(--t-primary)!important}'
-        );
-        return rules.join('\n');
-    }
-    (function injectThemeCSS() {
-        const st = document.createElement('style'); st.id = 'aomsukTheme'; st.textContent = themeCSS();
-        (document.head || document.documentElement).appendChild(st);
-    })();
-
-    let currentTheme = 'classic';
-    function applyTheme(id) {
-        if (!THEMES[id]) id = 'classic';
-        currentTheme = id;
-        const root = document.documentElement, vars = themeVars(THEMES[id]);
-        if (id === 'classic') {
-            root.removeAttribute('data-theme');
-            Object.keys(vars).forEach(k => root.style.removeProperty('--t-' + k));
-        } else {
-            Object.entries(vars).forEach(([k, v]) => root.style.setProperty('--t-' + k, v));
-            root.setAttribute('data-theme', id);
-        }
-        try { localStorage.setItem('aomsuk_theme', id); } catch (x) { }
-    }
-    // ใช้ธีมล่าสุดทันทีตอนเปิดหน้า (ไม่ต้องรอโหลดข้อมูล จะได้ไม่กระพริบ)
-    try { applyTheme(localStorage.getItem('aomsuk_theme') || 'classic'); } catch (x) { applyTheme('classic'); }
-    // ธีมที่บันทึกในบัญชี (ซิงก์ข้ามเครื่อง)
-    function syncTheme() { const t = A.settings && A.settings.theme; if (t && t !== currentTheme) applyTheme(t); }
-
-    A.themes = THEMES;
-    A.themeVars = themeVars;
-    A.currentTheme = () => currentTheme;
-
     // ---------- loading overlay (หน้าที่ต้องล็อกอิน) ----------
     if (!PUBLIC) {
         const st = document.createElement('style');
@@ -169,7 +76,7 @@
             if (!document.documentElement.classList.contains('aomsuk-loading')) return;
             const l = document.createElement('div');
             l.id = 'aomsukLoader';
-            l.style.cssText = 'position:fixed;inset:0;background:var(--t-bg,#d8eafe);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;font-family:Prompt,sans-serif;color:var(--t-primary,#9c8a7e)';
+            l.style.cssText = 'position:fixed;inset:0;background:#d8eafe;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;font-family:Prompt,sans-serif;color:#9c8a7e';
             l.innerHTML = '<i class="fa-solid fa-piggy-bank fa-bounce" style="font-size:48px"></i><p style="margin-top:12px;font-weight:600">กำลังโหลดข้อมูล...</p>';
             document.body.appendChild(l);
         });
@@ -262,7 +169,6 @@
     function becomeReady() {
         A.isReady = true;
         const run = () => {
-            syncTheme();
             hideLoader();
             decorateSidebar();
             setupBell();
@@ -273,7 +179,6 @@
         document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', run) : run();
     }
     function changed() {
-        syncTheme();
         changeCbs.forEach(cb => { try { cb(A); } catch (e) { console.error(e); } });
         renderBell(); renderPanel(); decorateSidebar(); generateSoon();
     }
@@ -339,8 +244,6 @@
     A.deleteWish = w(id => fb.fsM.deleteDoc(sub('wishlist', id)));
     A.setInterests = w(arr => fb.fsM.setDoc(userDoc(), { interests: arr }, { merge: true }));
     A.updateSettings = w(partial => fb.fsM.setDoc(userDoc(), { settings: partial }, { merge: true }));
-    // เปลี่ยนธีม: เปลี่ยนสีทันที แล้วบันทึกลงบัญชี
-    A.setTheme = async id => { applyTheme(id); A.settings.theme = currentTheme; await A.updateSettings({ theme: currentTheme }); };
     // รายรับ/รายจ่ายที่เล่าให้แชทบอทฟัง (users/{uid}.finance) จะได้ไม่ต้องบอกซ้ำทุกครั้ง
     A.finance = () => (A.profile && A.profile.finance) || null;
     A.saveFinance = w(async fin => {

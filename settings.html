@@ -99,13 +99,6 @@
             </form>
         </section>
 
-        <!-- ธีมสี -->
-        <section id="theme" class="bg-white rounded-3xl p-5 shadow-sm scroll-mt-20">
-            <h3 class="font-bold text-[#9c8a7e] mb-1"><i class="fa-solid fa-palette mr-2"></i>ธีมสี</h3>
-            <p class="text-[11px] text-gray-500 mb-3">เลือกแล้วเปลี่ยนสีทั้งเว็บทันที และจำไว้ในบัญชี เข้าเครื่องไหนก็เป็นธีมเดียวกัน</p>
-            <div id="themeGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
-        </section>
-
         <!-- การแจ้งเตือน -->
         <section id="notifications" class="bg-white rounded-3xl p-5 shadow-sm scroll-mt-20">
             <h3 class="font-bold text-[#9c8a7e] mb-3"><i class="fa-solid fa-bell mr-2"></i>การแจ้งเตือน</h3>
@@ -220,39 +213,6 @@
             if (confirm('ลบรูปโปรไฟล์ใช่ไหม?')) A.updatePhoto(null).then(() => toast('ลบรูปแล้ว'), err => toast(err.message));
         });
 
-        // ---------------- ธีมสี ----------------
-        function renderThemes() {
-            const cur = A.currentTheme();
-            $('themeGrid').innerHTML = Object.entries(A.themes).map(([id, th]) => {
-                const on = id === cur;
-                // หน้าจอจำลองเล็กๆ: แถบหัว + กล่องตารางออม + กล่องรายการออม + ปุ่ม
-                return `<button type="button" data-theme-id="${id}" class="text-left rounded-2xl p-1.5 border-2 transition ${on ? 'border-[#9c8a7e] shadow-md' : 'border-transparent hover:border-gray-200'}">
-                    <div class="rounded-xl overflow-hidden border border-gray-100" style="background:${th.bg}">
-                        <div class="h-4 flex items-center justify-center" style="background:${th.primary}"><span class="w-6 h-1 rounded-full bg-white/80"></span></div>
-                        <div class="p-1.5 space-y-1">
-                            <div class="h-3 rounded bg-white/90"></div>
-                            <div class="flex gap-1">
-                                <div class="flex-1 h-7 rounded-md" style="background:${th.card}"></div>
-                                <div class="flex-1 h-7 rounded-md" style="background:${th.soft}"></div>
-                            </div>
-                            <div class="flex justify-end"><div class="w-6 h-2 rounded-full" style="background:${th.button}"></div></div>
-                        </div>
-                    </div>
-                    <div class="flex items-center justify-between px-1 pt-1.5">
-                        <span class="text-xs font-semibold text-gray-700">${A.esc(th.name)}</span>
-                        ${on ? '<i class="fa-solid fa-circle-check text-[#9c8a7e]"></i>' : ''}
-                    </div>
-                </button>`;
-            }).join('');
-        }
-        $('themeGrid').addEventListener('click', e => {
-            const b = e.target.closest('[data-theme-id]'); if (!b) return;
-            const id = b.dataset.themeId;
-            if (id === A.currentTheme()) return;
-            A.setTheme(id).then(() => toast(`เปลี่ยนเป็นธีม${A.themes[id].name}แล้ว`), err => toast('บันทึกธีมไม่สำเร็จ: ' + err.message));
-            renderThemes();
-        });
-
         // ---------------- การแจ้งเตือน ----------------
         const NOTIF_OPTIONS = [
             ['notifyDue', 'ถึงวันออม', 'เตือนเมื่อวันนี้มียอดที่ต้องออม', 'fa-piggy-bank'],
@@ -334,10 +294,9 @@
             location.replace('login.html');
         });
 
-        function renderAll() { renderProfile(); renderThemes(); renderNotifSettings(); }
+        function renderAll() { renderProfile(); renderNotifSettings(); }
         A.onReady(() => { renderAll(); if (location.hash) setTimeout(() => document.querySelector(location.hash)?.scrollIntoView({ behavior: 'smooth' }), 100); });
         A.onChange(renderProfile);
-        A.onChange(renderThemes);
         A.onChange(() => { if (!document.activeElement || !document.activeElement.matches('[data-setting]')) renderNotifSettings(); });
     </script>
 </body>
