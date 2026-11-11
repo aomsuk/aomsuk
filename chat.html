@@ -244,10 +244,8 @@
             if (Object.keys(weights).length) r.weights = weights;
 
             // ---- รูปแบบการกระจายยอด ----
-            if (/ไม่(ต้อง)?\s*เท่า/.test(t) || /สุ่ม|random/.test(t)) r.style = 'random';
-            else if (/เท่า\s*ๆ?\s*กัน|คงที่|ยอดเดียวกัน|equal/.test(t)) r.style = 'equal';
-            else if (/เพิ่มขึ้นเรื่อย|ค่อย\s*ๆ?\s*เพิ่ม|ขั้นบันได|น้อยไปมาก|increas/.test(t)) r.style = 'increasing';
-            else if (/ลดลงเรื่อย|ค่อย\s*ๆ?\s*ลด|มากไปน้อย|decreas/.test(t)) r.style = 'decreasing';
+            // ตารางแบ่งยอดเท่าๆ กันเสมอ (ไม่สุ่ม)
+            if (/เท่า\s*ๆ?\s*กัน|คงที่|ยอดเดียวกัน|equal/.test(t)) r.style = 'equal';
 
             // ---- วันเริ่ม ----
             if (!r.start) {
@@ -368,37 +366,144 @@
                 amounts = cand.map(() => req.perAmount);
                 if (unbounded) amounts[n - 1] = round2(total0 - req.perAmount * (n - 1));
             } else {
-                const avg = total0 / n;
-                const unit = (avg >= 1 && Number.isInteger(total0)) ? 1 : 0.01;
-                const U = Math.round(total0 / unit);
-                if (U < n) return { error: `ยอด ${fmtMoney(total0)} บาท น้อยเกินไปสำหรับ ${n} ครั้ง ลองเพิ่มยอดหรือลดจำนวนวันดูนะ` };
-                const rng = mulberry32(seed || 1);
-                const style = req.style || 'random';
-                const w = cand.map((d, i) => {
-                    let x = (req.weights && req.weights[d.getDay()]) || 1;
-                    if (style === 'random') x *= 0.5 + rng();
-                    if (style === 'increasing') x *= 1 + 2 * i / Math.max(1, n - 1);
-                    if (style === 'decreasing') x *= 3 - 2 * i / Math.max(1, n - 1);
-                    return x;
-                });
-                const W = w.reduce((a, b) => a + b, 0), R = U - n;
-                const shares = w.map(x => x / W * R);
-                const alloc = shares.map(s => 1 + Math.floor(s));
-                let rem = U - alloc.reduce((a, b) => a + b, 0);
-                shares.map((s, i) => [s - Math.floor(s), i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (rem > 0) { alloc[i]++; rem--; } });
-                amounts = alloc.map(a => round2(a * unit));
+                if (total0 < n * 0.01) return { error: `ยอด ${fmtMoney(total0)} บาท น้อยเกินไปสำหรับ ${n} ครั้ง ลองเพิ่มยอดหรือลดจำนวนวันดูนะ` };
+                const hasWeights = req.weights && cand.some(d => req.weights[d.getDay()]);
+                amounts = hasWeights ? weightedSplit(total0, cand.map(d => req.weights[d.getDay()] || 1)) : niceSplit(total0, n);
             }
 
             const items = cand.map((d, i) => ({ date: d, amount: amounts[i] }));
             const total = round2(amounts.reduce((a, b) => a + b, 0));
             const warnings = [];
-            const avgPer = total / n;
-            if (freq === 'daily' && avgPer > 3000) warnings.push(`ยอดเฉลี่ยต่อวันค่อนข้างสูง (${fmtMoney(avgPer)} ฿) ถ้ารู้สึกหนักไป ลองขยายระยะเวลาดูนะ`);
-            if (n === 1 && freq !== 'daily') warnings.push('ช่วงเวลานี้มีวันออมแค่ครั้งเดียว ลองขยายระยะเวลาถ้าอยากแบ่งเป็นหลายงวด');
+            if (n === 1 && freq !== 'daily') warnings.push('ช่วงนี้มีรอบออมแค่ครั้งเดียว ถ้าอยากแบ่งเป็นหลายงวด ลองขยายเวลาดูนะ');
             return {
                 req, seed, start, end: unbounded ? cand[n - 1] : end, items, total, freq, warnings,
                 viewMonth: new Date(cand[0].getFullYear(), cand[0].getMonth(), 1)
             };
+        }
+        // ---- แบ่งยอดให้เท่าๆ กัน (ต่างกันแค่นิดหน่อย) ----
+        // เช่น 250 บาท / 7 วัน -> 35,35,35,35,35,35,40
+        function niceSplit(total, n) {
+            if (n <= 1) return [round2(total)];
+            if (!Number.isInteger(total) || total < n) {            // ยอดมีเศษสตางค์ หรือน้อยมาก -> แบ่งเป็นสตางค์
+                const T = Math.round(total * 100), base = Math.floor(T / n), r = T - base * n;
+                return Array.from({ length: n }, (_, i) => (base + (i >= n - r ? 1 : 0)) / 100);
+            }
+            if (total % n === 0) return Array(n).fill(total / n);
+            const avg = total / n;
+            for (const step of [10, 5, 1]) {                         // ลองเลขกลมๆ ก่อน เศษไปรวมวันสุดท้าย
+                const base = Math.floor(avg / step) * step;
+                if (base <= 0) continue;
+                const last = total - base * (n - 1);
+                const okDiff = step === 1 ? 5 : Math.max(step, base * 0.25);
+                if (last >= base && last - base <= okDiff) return [...Array(n - 1).fill(base), last];
+            }
+            const base = Math.floor(avg), r = total - base * n;     // ไม่งั้นเพิ่มวันละ 1 บาทในวันท้ายๆ
+            return Array.from({ length: n }, (_, i) => base + (i >= n - r ? 1 : 0));
+        }
+        // แบบมีน้ำหนัก (เช่น วันหยุดออมมากกว่า) -> วันประเภทเดียวกันได้ยอดเท่ากัน
+        function weightedSplit(total, weights) {
+            const W = weights.reduce((a, b) => a + b, 0), integer = Number.isInteger(total);
+            const out = weights.map(w => integer ? Math.floor(total * w / W) : Math.floor(total * w / W * 100) / 100);
+            out[out.length - 1] = round2(total - out.slice(0, -1).reduce((a, b) => a + b, 0));
+            return out;
+        }
+
+        // ---- รายรับ / รายจ่าย / เติมเกม ----
+        const PER_SRC = 'วัน|สัปดาห์|สัปดาห|อาทิตย์|อาทิตย|อาทิต|เดือน|ปี';
+        const PERIOD_DAYS = { day: 1, week: 7, month: 30, year: 365 };
+        const PERIOD_WORD = { day: 'วัน', week: 'สัปดาห์', month: 'เดือน', year: 'ปี' };
+        const periodOf = w => !w ? null : /^วัน/.test(w) ? 'day' : /^(สัปดาห|อาทิต)/.test(w) ? 'week' : /^เดือน/.test(w) ? 'month' : 'year';
+        const MULT_F = { k: 1e3, 'พัน': 1e3, 'หมื่น': 1e4, 'แสน': 1e5 };
+        const INCOME_KEYS = [['เงินเดือน', 'month'], ['รายได้', 'month'], ['รายรับ', 'month'], ['ค่าจ้าง', 'month'], ['ค่าแรง', 'day'], ['ได้เงิน', 'month'], ['เงินค่าขนม', 'day'], ['ได้ค่าขนม', 'day'], ['ค่าขนม', 'day']];
+        const EXPENSE_TYPES = [
+            { cat: 'game', label: 'ค่าเติมเกม', key: 'ซื้อของในเกม|เติมเงินในเกม|เติมเงินเกม|เติมเกมส์|เติมเกม|ค่าเกม|เติม\\s*robux|เติมโรบัค|เติมrov|เกม', def: 'month' },
+            { cat: 'food', label: 'ค่ากิน', key: 'กินข้าว|ค่าข้าว|ค่ากิน|ค่าอาหาร|กินอาหาร|ข้าว|กิน', def: 'day' },
+            { cat: 'transport', label: 'ค่าเดินทาง', key: 'ค่ารถไฟฟ้า|ค่ารถเมล์|ค่ารถ|ค่าเดินทาง|ค่าน้ำมัน|ค่าวิน|ค่าbts|เดินทาง', def: 'day' },
+            { cat: 'snack', label: 'ค่าขนม', key: 'ซื้อขนม|กินขนม|ขนม', def: 'day' },
+            { cat: 'bills', label: 'ค่าที่พัก/ค่าบิล', key: 'ค่าหอ|ค่าห้อง|ค่าเช่า|ค่าน้ำค่าไฟ|ค่าไฟ|ค่าน้ำ|ค่าเน็ต|ค่าโทรศัพท์|ค่าโทร', def: 'month' },
+            { cat: 'other', label: 'ค่าใช้จ่ายอื่น', key: 'ค่าใช้จ่ายอื่นๆ|ค่าใช้จ่ายอื่น|ค่าใช้จ่าย|ใช้จ่าย|ใช้เงิน', def: 'day' }
+        ];
+        const ITEM_GUESS = [[/ตั๋วหนัง|ดูหนัง/, 'ตั๋วหนัง', 250], [/ชาไข่มุก|ชานม/, 'ชานม', 60], [/กาแฟ/, 'กาแฟ', 65]];
+        const NUM_F = '(\\d+(?:\\.\\d+)?)\\s*(k|พัน|หมื่น|แสน)?\\s*(?:บาท|฿)?';
+        const NOT_COUNT = '(?!\\s*(?:ครั้ง|ใบ|ชิ้น|อัน|แก้ว|คู่|ตัว|เครื่อง|เล่ม|มื้อ|คน|วัน|สัปดาห|อาทิต|เดือน|ปี))';
+
+        // ดึงข้อมูลการเงินออกจากข้อความ แล้วคืนข้อความที่เหลือไปให้ parse() ทำตาราง
+        function parseFinance(raw, wishlist) {
+            const TH = '๐๑๒๓๔๕๖๗๘๙';
+            let t = raw.replace(/[๐-๙]/g, c => TH.indexOf(c)).replace(/(\d),(?=\d{3})/g, '$1').replace(/(\d),(?=\d{3})/g, '$1');
+            const fin = { income: null, expenses: [], gameMentioned: false };
+            const blank = (m) => { t = t.slice(0, m.index) + ' '.repeat(m[0].length) + t.slice(m.index + m[0].length); };
+            const val = (num, mult) => parseFloat(num) * (mult ? MULT_F[mult.toLowerCase()] : 1);
+
+            // รายรับ
+            for (const [key, def] of INCOME_KEYS) {
+                const re = new RegExp(`(${key})(?:ของ(?:ฉัน|ผม|เรา|หนู))?\\s*(?:คือ|ประมาณ|ราวๆ|ราว|=|:)?\\s*(?:(${PER_SRC})\\s*ละ\\s*)?(?:ประมาณ\\s*)?${NUM_F}\\s*(?:(?:ต่อ|\\/)\\s*(${PER_SRC}))?`, 'i');
+                const m = t.match(re);
+                if (m) { fin.income = { amount: val(m[3], m[4]), period: periodOf(m[2] || m[5]) || def, word: key }; blank(m); break; }
+            }
+            // รายจ่าย
+            for (const ex of EXPENSE_TYPES) {
+                const re = new RegExp(`(${ex.key})[^\\d\\n,]{0,12}?(?:(${PER_SRC})\\s*ละ\\s*)?(?:ประมาณ|ราวๆ|ราว)?\\s*${NUM_F}${NOT_COUNT}\\s*(?:(?:ต่อ|\\/|ทุก)\\s*(${PER_SRC}))?`, 'gi');
+                let m;
+                while ((m = re.exec(t))) {
+                    const word = m[1], hasPeriod = !!(m[2] || m[5]);
+                    // คำกว้างๆ (กิน/ข้าว/ขนม/เกม/ใช้เงิน) ต้องมีช่วงเวลา เช่น "วันละ" ไม่งั้นอาจเป็นของที่อยากซื้อ
+                    if (!hasPeriod && /^(กิน|ข้าว|ขนม|เกม|เดินทาง|ใช้เงิน|ใช้จ่าย)$/.test(word)) continue;
+                    const label = ex.cat === 'food' ? (/ข้าว/.test(word) ? 'ค่าข้าว' : 'ค่ากิน') : ex.cat === 'game' ? 'ค่าเติมเกม' : (/^ค่า/.test(word) ? word : ex.label);
+                    fin.expenses.push({ cat: ex.cat, label, amount: val(m[3], m[4]), period: periodOf(m[2] || m[5]) || ex.def });
+                    blank(m); re.lastIndex = 0;
+                }
+            }
+            if (/เติมเกม|ซื้อของในเกม|ค่าเกม|เติมเงินเกม|เล่นเกม|robux|โรบัค/i.test(t)) fin.gameMentioned = true;
+
+            // ของที่อยากได้ + จำนวน (เช่น ตั๋วหนัง 1 ใบ)
+            let qty = 1, unitWord = '';
+            const q = t.match(/(\d+)\s*(ใบ|ชิ้น|อัน|แก้ว|คู่|ตัว|เครื่อง|เล่ม)/);
+            if (q) { qty = Math.max(1, parseInt(q[1], 10)); unitWord = q[2]; blank(q); }
+            let item = null;
+            const low = t.toLowerCase();
+            const w = (wishlist || []).filter(x => x && x.name && low.includes(String(x.name).toLowerCase())).sort((a, b) => b.name.length - a.name.length)[0];
+            if (w) item = { name: w.name, price: +w.price, qty, unitWord, source: 'wishlist' };
+            else for (const [re, name, price] of ITEM_GUESS) if (re.test(t)) { item = { name, price, qty, unitWord, source: 'guess' }; break; }
+            // ชื่อของที่อยากได้ (ใช้ตั้งชื่อแผน) เช่น "อยากได้หูฟัง 2990"
+            let itemName = item ? item.name : null;
+            if (!itemName) {
+                const nm = t.match(/(?:อยากได้|อยากซื้อ|เก็บเงินซื้อ|ออมเงินซื้อ|ไว้ซื้อ|ซื้อ)\s*([^\d,]{2,30}?)\s*(?=\d|ภายใน|ใน\s|ราคา|$|,)/);
+                if (nm && !/^(เงิน|ของ|อะไร|บ้าง)$/.test(nm[1].trim())) itemName = nm[1].trim();
+            }
+            return { fin, item, itemName, rest: t };
+        }
+
+        function mergeFinance(base, add) {
+            const out = { income: (base && base.income) || null, expenses: [...((base && base.expenses) || [])] };
+            if (add.income) out.income = add.income;
+            add.expenses.forEach(e => { out.expenses = out.expenses.filter(x => x.cat !== e.cat); out.expenses.push(e); });
+            return out;
+        }
+
+        // คำนวณเงินที่เหลือออมได้ต่อวัน แล้วเทียบกับยอดที่ต้องออม
+        function budgetOf(fin) {
+            if (!fin || !fin.income || !(fin.income.amount > 0)) return null;
+            const inc = fin.income.amount / PERIOD_DAYS[fin.income.period];
+            let fixed = 0, game = 0;
+            (fin.expenses || []).forEach(e => { const d = e.amount / PERIOD_DAYS[e.period]; if (e.cat === 'game') game += d; else fixed += d; });
+            return { inc, fixed, game, free: inc - fixed - game, freeBeforeGame: inc - fixed };
+        }
+        function assessPlan(plan, fin) {
+            const b = budgetOf(fin); if (!b) return null;
+            const days = Math.round((plan.end - plan.start) / 864e5) + 1;
+            const need = plan.total / days;
+            const res = { ...b, need, days, ok: need <= b.free + 1e-9 };
+            if (!res.ok) {
+                if (b.free > 0) res.daysNeeded = Math.ceil(plan.total / b.free);
+                const g = (fin.expenses || []).find(e => e.cat === 'game');
+                if (g && need <= b.freeBeforeGame) {
+                    const per = PERIOD_DAYS[g.period];
+                    res.cutGame = Math.min(g.amount, Math.ceil((need - b.free) * per / 10) * 10);
+                    res.game0 = g;
+                }
+            }
+            return res;
         }
         // ==LOGIC END== ------------------------------------------------------
 
@@ -417,12 +522,17 @@
         const scrollDown = () => requestAnimationFrame(() => $chat.scrollTo({ top: $chat.scrollHeight, behavior: 'smooth' }));
         const AVATAR = '<div class="w-8 h-8 bg-[#9c8a7e] rounded-full mt-1 shrink-0 flex items-center justify-center text-white text-xs"><i class="fa-solid fa-piggy-bank"></i></div>';
 
+        let finance = null;     // รายรับ/รายจ่ายที่ผู้ใช้เคยบอก (จำไว้ใน Firebase)
+        let gameMentioned = false;
+        const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+        const baht = n => (Math.round(n * 100) / 100).toLocaleString('th-TH', { maximumFractionDigits: Number.isInteger(Math.round(n * 100) / 100) ? 0 : 2 });
+
         const EXAMPLES = [
-            'ออม 500 บาท ภายใน 1 เดือน ไม่ออมทุกวันอังคาร',
-            'ออมรายสัปดาห์ 3,000 บาท ใน 3 เดือน',
-            'เดือนละ 1,000 บาท เป็นเวลา 6 เดือน',
-            'ออม 2,000 บาท ใน 1 เดือน วันหยุดออมมากกว่าวันธรรมดา',
-            'วันละ 20 บาท จนครบ 1,000 บาท'
+            'เงินเดือน 10,000 กินข้าววันละ 40 มีเติมเกมด้วย อยากซื้อตั๋วหนัง 1 ใบใน 1 อาทิตย์',
+            'ได้ค่าขนมวันละ 150 อยากเก็บ 2,000 ใน 1 เดือน',
+            'อยากเก็บ 500 บาทใน 1 เดือน แต่ไม่เก็บวันอังคาร',
+            'เก็บวันละ 20 จนครบ 1,000',
+            'อยากเก็บ 3,000 ใน 3 เดือน แบบรายสัปดาห์'
         ];
 
         function setChips(list) {
@@ -450,13 +560,12 @@
             typing.className = 'flex gap-2 items-start msg-in';
             typing.innerHTML = `${AVATAR}<div class="bg-[#fcefdc] px-4 py-3 rounded-3xl rounded-tl-none shadow-sm flex gap-1"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>`;
             $chat.append(typing); scrollDown();
-            setTimeout(() => { typing.remove(); fn(); busy = false; }, 550 + Math.random() * 400);
+            setTimeout(() => { typing.remove(); fn(); busy = false; }, 700 + Math.random() * 700);
         }
 
         // ---- การ์ดตารางการออม ----
         const compact = n => n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : (Number.isInteger(n) ? String(n) : n.toFixed(n < 10 ? 2 : 1));
         const FREQ_LABEL = { daily: 'รายวัน', weekly: 'รายสัปดาห์', monthly: 'รายเดือน' };
-        const STYLE_LABEL = { random: 'สุ่มยอดรายวัน', equal: 'ยอดเท่าๆ กัน', increasing: 'ยอดเพิ่มขึ้นเรื่อยๆ', decreasing: 'ยอดลดลงเรื่อยๆ' };
         const sameMonth = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
 
         function badges(p) {
@@ -469,7 +578,7 @@
             if (r.excludeToday) b.push('ไม่ออมวันนี้');
             if (r.weights) Object.entries(r.weights).forEach(([d, f]) => b.push(`วัน${DAY_FULL[d]}ออม${f > 1 ? 'มากขึ้น' : 'น้อยลง'}`));
             if (r.perAmount) b.push(`ครั้งละ ${fmtMoney(r.perAmount)} ฿`);
-            else b.push(STYLE_LABEL[r.style || 'random']);
+            else if (!r.weights) b.push('ยอดเท่าๆ กัน');
             return b.map(x => `<span class="inline-flex items-center gap-1 bg-white/70 border border-[#e6d8c6] text-[11px] text-[#7a6a5f] px-2 py-0.5 rounded-full">${x}</span>`).join('');
         }
 
@@ -507,7 +616,6 @@
             const n = p.items.length, shown = p.expanded ? p.items : p.items.slice(0, 6);
             const rows = shown.map((it, i) => `<div class="flex justify-between ${i < shown.length - 1 ? 'border-b border-gray-200/80 pb-1' : ''}">
                     <span>${fmtDate(it.date, { weekday: 'short', day: 'numeric', month: 'short' })}</span><span class="font-bold">${fmtMoney(it.amount)} ฿</span></div>`).join('');
-            const canReroll = !p.req.perAmount && (p.req.style || 'random') === 'random';
             return `
                 <p class="font-semibold text-[#9c8a7e]">${esc(p.headline)}</p>
                 ${calendarHTML(p)}
@@ -526,8 +634,7 @@
                 <div class="flex gap-2">
                     ${p.saved
                         ? `<a href="dashboard.html" class="flex-1 text-center bg-green-600 text-white rounded-full py-2 text-xs font-semibold"><i class="fa-solid fa-check mr-1"></i>บันทึกแล้ว · ไปหน้าติดตาม</a>`
-                        : `<button data-act="save" data-id="${p.id}" class="flex-1 bg-[#9c8a7e] hover:bg-[#8a7a6f] text-white rounded-full py-2 text-xs font-semibold"><i class="fa-solid fa-floppy-disk mr-1"></i>บันทึกเป้าหมาย</button>`}
-                    ${canReroll && !p.saved ? `<button data-act="reroll" data-id="${p.id}" class="bg-white border border-[#9c8a7e] text-[#9c8a7e] rounded-full px-3 py-2 text-xs font-semibold"><i class="fa-solid fa-shuffle mr-1"></i>สุ่มใหม่</button>` : ''}
+                        : `<button data-act="save" data-id="${p.id}" class="flex-1 bg-[#9c8a7e] hover:bg-[#8a7a6f] text-white rounded-full py-2 text-xs font-semibold"><i class="fa-solid fa-floppy-disk mr-1"></i>เอาตารางนี้</button>`}
                 </div>`;
         }
 
@@ -542,40 +649,48 @@
                 frequency: p.freq,
                 startDate: dkey(p.start),
                 endDate: dkey(p.end),
-                conditions: { excludedDays: p.req.excluded || [], onlyDays: p.req.only || [], weights: p.req.weights || {}, style: p.req.perAmount ? 'fixed' : (p.req.style || 'random') },
+                conditions: { excludedDays: p.req.excluded || [], onlyDays: p.req.only || [], weights: p.req.weights || {}, style: p.req.perAmount ? 'fixed' : 'equal' },
                 schedule: p.items.map(it => ({ date: dkey(it.date), amount: it.amount, saved: false })),
                 savedAmount: 0,
                 createdAt: new Date().toISOString()
             };
             await AOMSUK.saveGoal(goal);
             AOMSUK.notify(`plan_${goal.id}`, {
-                type: 'plan', title: 'สร้างแผนการออมแล้ว 📅',
+                type: 'plan', title: 'สร้างแผนการออมแล้ว',
                 body: `"${goal.title}" ออม ${fmtMoney(goal.target)} ฿ ทั้งหมด ${goal.schedule.length} ครั้ง เริ่ม ${fmtDate(p.start, { day: 'numeric', month: 'short' })}`,
                 link: 'dashboard.html'
             }).catch(() => { });
         }
 
         // ---- สมองของบอท ----
-        const HELP_HTML = `<p class="font-semibold text-[#9c8a7e]">บอกฉันได้แบบนี้เลย 👇</p>
-            <ul class="list-disc pl-5 space-y-1 text-[13px]">
-                <li><b>ยอดเงิน</b>: 500 บาท, 2 พัน, 1 หมื่น</li>
-                <li><b>ระยะเวลา</b>: 2 สัปดาห์, 3 เดือน, 1 ปี, ภายในสิ้นเดือน</li>
-                <li><b>ความถี่</b>: ทุกวัน / รายสัปดาห์ / รายเดือน / ทุกวันที่ 25 / วันเว้นวัน</li>
-                <li><b>ยอดต่อครั้ง</b>: วันละ 20 บาท, สัปดาห์ละ 300, เดือนละ 1,000</li>
-                <li><b>เว้นวัน</b>: ไม่ออมวันอังคาร, ไม่ออมวันหยุด</li>
-                <li><b>เฉพาะวัน</b>: ออมทุกวันจันทร์และศุกร์, เฉพาะวันธรรมดา</li>
-                <li><b>น้ำหนัก</b>: วันหยุดออมมากกว่าวันธรรมดา</li>
-                <li><b>รูปแบบยอด</b>: ยอดเท่ากัน / สุ่ม / เพิ่มขึ้นเรื่อยๆ</li>
-                <li><b>วันเริ่ม</b>: เริ่มพรุ่งนี้, เริ่มสัปดาห์หน้า, เริ่มเดือนหน้า</li>
-            </ul>
-            <p class="text-[12px] text-gray-600">พอได้ตารางแล้ว พิมพ์แก้ต่อได้เลย เช่น "เปลี่ยนเป็น 1,000 บาท" หรือ "ไม่ออมวันเสาร์ด้วย" · พิมพ์ "เริ่มใหม่" เพื่อล้างเงื่อนไข</p>`;
+        const HELP_HTML = `<p>เล่าให้ฟังแบบคุยกันปกติได้เลย ไม่ต้องเป๊ะ เช่น</p>
+            <p class="bg-white/60 rounded-xl px-3 py-2 text-[13px]">"เงินเดือน 12,000 กินข้าววันละ 60 ค่ารถวันละ 30 เติมเกมเดือนละ 300 อยากได้หูฟัง 1,500 ภายใน 1 เดือน"</p>
+            <p>เราจะดูให้ว่าหักค่าใช้จ่ายแล้วเหลือวันละเท่าไหร่ ต้องเก็บวันละเท่าไหร่ถึงจะทัน แล้วจัดตารางยอดเท่าๆ กันให้</p>
+            <p class="text-[13px] text-gray-600">อยากเก็บแบบรายสัปดาห์ รายเดือน เว้นบางวัน หรือเริ่มพรุ่งนี้ ก็บอกได้ พอได้ตารางแล้วจะพิมพ์แก้ต่อ เช่น "เปลี่ยนเป็น 2 อาทิตย์" ก็ได้ พิมพ์ "เริ่มใหม่" ถ้าอยากเริ่มคิดใหม่</p>`;
 
-        function describeHeadline(p) {
-            const n = p.items.length, r = p.req;
-            if (r.label) return `ได้เลย! ตารางออมเพื่อ "${r.label}" มาแล้ว 🎯`;
-            if (r.perAmount && r.amount && !r.duration && !r.endMode) return `ได้เลย! ออมครั้งละ ${fmtMoney(r.perAmount)} ฿ อีก ${n} ครั้งก็ถึงเป้าแล้ว 💪`;
-            if (r.excluded && r.excluded.length) return `ได้เลย! นี่คือตารางการออมของคุณ (เว้นวัน${r.excluded.map(d => DAY_FULL[d]).join(', ')}ให้แล้ว)`;
-            return 'ได้เลย! นี่คือตารางการออมของคุณ';
+        const FREQ_UNIT = { daily: ['วันละ', 'วัน'], weekly: ['สัปดาห์ละ', 'ครั้ง'], monthly: ['เดือนละ', 'ครั้ง'] };
+        // อธิบายยอดในตารางแบบที่คนพูดกัน
+        function describeAmounts(plan) {
+            const a = plan.items.map(i => i.amount), n = a.length, [per, cnt] = FREQ_UNIT[plan.freq] || FREQ_UNIT.daily;
+            if (n === 1) return `เก็บครั้งเดียว ${baht(a[0])} บาท`;
+            const first = a[0];
+            if (a.every(x => x === first)) return `${per} ${baht(first)} บาท ทั้งหมด ${n} ${cnt}`;
+            if (a.slice(0, -1).every(x => x === first)) return `${per} ${baht(first)} บาท แล้ว${cnt === 'วัน' ? 'วัน' : 'ครั้ง'}สุดท้ายเก็บ ${baht(a[n - 1])} บาท (รวม ${n} ${cnt})`;
+            const lo = Math.min(...a), hi = Math.max(...a);
+            return `${per} ${baht(lo)}–${baht(hi)} บาท ทั้งหมด ${n} ${cnt}`;
+        }
+
+        function financeLine(fin, b) {
+            const inc = fin.income, parts = [];
+            if (inc.period === 'day') parts.push(`ได้วันละ ${baht(inc.amount)} บาท`);
+            else if (inc.word === 'เงินเดือน' && inc.period === 'month') parts.push(`เงินเดือน ${baht(inc.amount)} บาท เฉลี่ยแล้วตกวันละประมาณ ${baht(Math.round(b.inc))} บาท`);
+            else parts.push(`ได้${PERIOD_WORD[inc.period]}ละ ${baht(inc.amount)} บาท เฉลี่ยแล้วตกวันละประมาณ ${baht(Math.round(b.inc))} บาท`);
+            const exps = (fin.expenses || []).map(e => e.period === 'day'
+                ? `${e.label}วันละ ${baht(e.amount)}`
+                : `${e.label}${PERIOD_WORD[e.period]}ละ ${baht(e.amount)} (ตกวันละ ~${baht(Math.round(e.amount / PERIOD_DAYS[e.period]))})`);
+            if (exps.length) parts.push(`หัก${exps.join(' ')}`);
+            if (b.free < 0.5) return parts.join(' ') + (b.free < -0.5 ? ` ก็จะติดลบวันละราว ${baht(Math.round(-b.free))} บาท` : ' ก็แทบไม่เหลือเลย');
+            return parts.join(' ') + ` ก็จะเหลือวันละราว ${baht(Math.round(b.free))} บาท`;
         }
 
         function respond(text) {
@@ -584,61 +699,128 @@
 
             if (/^(เริ่มใหม่|ล้าง|รีเซ็ต|reset|clear)/.test(t)) {
                 context = null; awaiting = null;
-                addBot('ล้างเงื่อนไขเรียบร้อย ✨ เริ่มตั้งเป้าหมายใหม่กันเลย บอกยอดเงินและระยะเวลามาได้เลยนะ');
+                addBot(pick(['โอเค เริ่มใหม่กัน รอบนี้อยากเก็บเงินไว้ทำอะไรดี?', 'ล้างแล้ว อยากเก็บเงินไว้ซื้ออะไรดี เล่ามาได้เลย']));
+                return setChips(EXAMPLES);
+            }
+            if (/(ลืม|ลบ|ล้าง)(ข้อมูล)?(รายได้|เงินเดือน|รายรับ)/.test(t)) {
+                finance = null; AOMSUK.saveFinance(null).catch(() => { });
+                addBot('ลบข้อมูลรายได้กับค่าใช้จ่ายที่เคยบอกไว้แล้วนะ');
                 return setChips(EXAMPLES);
             }
             if (noNum && /^(help|ช่วย|วิธีใช้|ใช้ยังไง|ทำอะไรได้|สั่งอะไรได้)/.test(t)) { addBot(HELP_HTML); return setChips(EXAMPLES); }
-            if (noNum && /(เป้าหมายของฉัน|ดูเป้าหมาย|เป้าหมายที่บันทึก)/.test(t)) {
+            if (noNum && /(เป้าหมายของฉัน|ดูเป้าหมาย|เป้าหมายที่บันทึก|แผนของฉัน)/.test(t)) {
                 const goals = AOMSUK.goals;
                 addBot(goals.length
-                    ? `ตอนนี้คุณมีเป้าหมายที่บันทึกไว้ ${goals.length} รายการ:<br>${goals.slice(-5).map(g => `• ${esc(g.title)} (${esc(g.startDate)} ถึง ${esc(g.endDate)})`).join('<br>')}<br><a href="dashboard.html" class="text-[#9c8a7e] font-semibold underline">ไปหน้าติดตาม</a>`
-                    : 'ยังไม่มีเป้าหมายที่บันทึกไว้เลย มาสร้างอันแรกกัน! 🐷');
+                    ? `ตอนนี้มีแผนเก็บเงินอยู่ ${goals.length} อัน:<br>${goals.slice(-5).map(g => `• ${esc(g.title)} (${esc(g.startDate)} ถึง ${esc(g.endDate)})`).join('<br>')}<br><a href="dashboard.html" class="text-[#9c8a7e] font-semibold underline">ไปดูที่หน้าติดตาม</a>`
+                    : 'ยังไม่มีแผนเลย มาเริ่มอันแรกกัน อยากเก็บเงินไว้ซื้ออะไรดี?');
                 return setChips(EXAMPLES);
             }
-            const p = parse(text);
-            if (!hasInfo(p)) {
-                if (/^(สวัสดี|หวัดดี|ดีจ้า|ดีครับ|ดีค่ะ|hello|hi|hey)/.test(t)) { addBot('สวัสดี! 👋 วันนี้อยากออมเงินเพื่ออะไรดี? บอกยอดเงินกับระยะเวลามาได้เลย เดี๋ยวฉันจัดตารางให้'); return setChips(EXAMPLES); }
-                if (/ขอบคุณ|ขอบใจ|thank|thx/.test(t)) { addBot('ยินดีเสมอ! 💛 ออมได้ทีละนิด เดี๋ยวก็ถึงเป้าแน่นอน สู้ๆ นะ'); return; }
-                addBot('ขอโทษนะ ฉันยังไม่ค่อยเข้าใจ 🙏 ลองบอกยอดเงิน ระยะเวลา และเงื่อนไขการออม เช่น <b>"ออม 500 บาท ใน 1 เดือน ไม่ออมวันอังคาร"</b> หรือพิมพ์ <b>"ช่วย"</b> เพื่อดูวิธีใช้');
+
+            // ดึงรายรับ/รายจ่าย/ของที่อยากได้ออกจากข้อความก่อน
+            const F = parseFinance(text, AOMSUK.wishlist);
+            const finChanged = !!(F.fin.income || F.fin.expenses.length);
+            if (finChanged) { finance = mergeFinance(finance, F.fin); AOMSUK.saveFinance(finance).catch(() => { }); }
+            if (F.fin.gameMentioned) gameMentioned = true;
+            const force = !!context && /ทำตาราง(ตามนี้|เลย|ไปเลย)|เอาตามนี้|ไม่เป็นไร(เอา)?ตามเดิม|ตามเดิมเลย/.test(t);
+
+            const p = parse(F.rest);
+            if (!p.label && F.itemName && (p.amount != null || p.perAmount != null || F.item)) p.label = F.itemName;
+            let itemNote = '';
+            if (F.item && p.amount == null && p.perAmount == null) {
+                p.amount = F.item.price * F.item.qty;
+                p.label = p.label || `${F.item.name}${F.item.qty > 1 ? ` ${F.item.qty} ${F.item.unitWord}` : ''}`;
+                if (F.item.source === 'guess') itemNote = `(คิด${F.item.name}ไว้ที่${F.item.unitWord || 'ราคา'}ละประมาณ ${baht(F.item.price)} บาทนะ ถ้าราคาไม่ใช่ก็บอกได้)`;
+                else itemNote = `(ใช้ราคา${F.item.name}จากเป้าหมายที่ตั้งไว้ ${baht(F.item.price)} บาท)`;
+            }
+
+            if (!hasInfo(p) && !finChanged && !force) {
+                if (/^(สวัสดี|หวัดดี|ดีจ้า|ดีครับ|ดีค่ะ|hello|hi|hey)/.test(t)) { addBot(pick(['หวัดดี~ วันนี้อยากเก็บเงินไว้ทำอะไรเหรอ?', 'ไง วันนี้มีอะไรอยากได้รึเปล่า เล่ามาได้เลย'])); return setChips(EXAMPLES); }
+                if (/ขอบคุณ|ขอบใจ|thank|thx/.test(t)) { addBot(pick(['ยินดีเลย เก็บทีละนิดเดี๋ยวก็ถึง สู้ ๆ นะ', 'ไม่เป็นไรเลย มีอะไรให้ช่วยคิดอีกก็ทักมาได้นะ'])); return; }
+                addBot('อันนี้เรายังไม่ค่อยเข้าใจ ลองเล่าแบบนี้ดูไหม <b>"เงินเดือน 10,000 กินข้าววันละ 40 อยากได้ตั๋วหนังใน 1 อาทิตย์"</b> หรือพิมพ์ <b>"ช่วย"</b> ก็ได้');
                 return setChips(EXAMPLES);
+            }
+
+            // บอกแค่รายได้/รายจ่าย ยังไม่ได้บอกว่าจะเก็บเงินไปทำอะไร
+            if (!hasInfo(p) && finChanged && !context) {
+                const b = budgetOf(finance);
+                if (b) addBot(`${financeLine(finance, b)}${b.free <= 0 ? ' ตอนนี้รายจ่ายเกือบเท่ารายได้แล้วนะ ลองดูว่ามีอะไรลดได้บ้าง' : ''}<br>จดไว้ให้แล้ว อยากเก็บเงินไว้ซื้ออะไร แล้วอยากได้ภายในกี่วันดี?`);
+                else addBot('จดค่าใช้จ่ายไว้ให้แล้ว ถ้าบอกเงินเดือนหรือค่าขนมที่ได้ต่อวันด้วย เราจะช่วยดูให้ว่าเก็บได้วันละเท่าไหร่');
+                return setChips(['อยากได้ตั๋วหนังใน 1 อาทิตย์', 'อยากเก็บ 1,000 ใน 1 เดือน', 'อยากเก็บ 5,000 ใน 3 เดือน']);
             }
 
             // ตอบตัวเลขลอยๆ ตอนถามระยะเวลา
             if (awaiting === 'duration' && p.amountBare && !p.duration && !p.endMode && Object.keys(p).length <= 2) {
                 const n = p.amount;
-                addBot(`${n} อะไรดี วัน สัปดาห์ หรือเดือน? 🤔`);
-                return setChips([`${n} วัน`, `${n} สัปดาห์`, `${n} เดือน`]);
+                addBot(`${n} อะไรดี วัน อาทิตย์ หรือเดือน?`);
+                return setChips([`${n} วัน`, `${n} อาทิตย์`, `${n} เดือน`]);
             }
 
             const complete = (p.amount != null || p.perAmount != null) && (p.duration || p.endMode || (p.perAmount && p.amount));
-            let req = (complete || !context) ? p : mergeReq(context, p);
+            let req = force ? context : (complete || !context) ? p : mergeReq(context, p);
             context = req;
 
             if (req.amount == null && req.perAmount == null) {
                 awaiting = 'amount';
-                addBot('อยากออมทั้งหมดเท่าไหร่ดี? 💰 (เช่น 500 บาท หรือ วันละ 20 บาท)');
+                addBot(pick(['อยากเก็บทั้งหมดเท่าไหร่ดี? หรือบอกชื่อของที่อยากได้มาก็ได้นะ', 'ของที่อยากได้ราคาเท่าไหร่เหรอ?']));
                 return setChips(['500 บาท', '1,000 บาท', '5,000 บาท', 'วันละ 20 บาท']);
             }
             if (!req.duration && !req.endMode && !(req.perAmount && req.amount)) {
                 awaiting = 'duration';
                 addBot(req.perAmount
-                    ? `ออมครั้งละ ${fmtMoney(req.perAmount)} บาท นานแค่ไหนดี? หรือจะบอกเป้าหมายรวมก็ได้นะ (เช่น "จนครบ 1,000 บาท")`
-                    : `ออม ${fmtMoney(req.amount)} บาท ให้ครบภายในกี่วัน/สัปดาห์/เดือนดี? ⏳`);
-                return setChips(['2 สัปดาห์', '1 เดือน', '3 เดือน', 'ภายในสิ้นเดือนนี้']);
+                    ? `เก็บครั้งละ ${baht(req.perAmount)} บาท อยากเก็บนานแค่ไหนดี? หรือบอกยอดรวมที่อยากได้ก็ได้ เช่น "จนครบ 1,000"`
+                    : `${req.label ? `อยากได้${esc(req.label)}` : `เก็บ ${baht(req.amount)} บาท`} ภายในกี่วันดี?${itemNote ? ' ' + itemNote : ''}`);
+                return setChips(['1 อาทิตย์', '2 อาทิตย์', '1 เดือน', '3 เดือน']);
             }
             awaiting = null;
 
-            const seed = Math.floor(Math.random() * 1e9);
-            const plan = buildPlan(req, seed);
+            const plan = buildPlan(req, 1);
             if (plan.error) {
-                addBot(`<p>${esc(plan.error)}</p>`);
-                return setChips(plan.noDays ? ['เริ่มพรุ่งนี้', 'ขยายเป็น 1 สัปดาห์', 'เริ่มใหม่'] : ['เริ่มใหม่', 'ช่วย']);
+                addBot(esc(plan.error));
+                return setChips(plan.noDays ? ['เริ่มพรุ่งนี้', 'ขยายเป็น 1 อาทิตย์', 'เริ่มใหม่'] : ['เริ่มใหม่', 'ช่วย']);
             }
+
+            // เช็กกับรายรับ-รายจ่ายจริง
+            const as = assessPlan(plan, finance);
+            const what = req.label ? esc(req.label) : `เงิน ${baht(plan.total)} บาท`;
+            const goalPhrase = req.label ? `อยากได้${esc(req.label)}` : `อยากเก็บ ${baht(plan.total)} บาท`;
+            const days = Math.round((plan.end - plan.start) / 864e5) + 1;
+            if (as && !as.ok && !force) {
+                let msg = `${financeLine(finance, as)}<br><br>แต่ถ้า${goalPhrase}ภายใน ${days} วัน ต้องเก็บเฉลี่ยวันละประมาณ ${baht(Math.ceil(as.need))} บาท ${as.free > 0 ? 'ซึ่งเกินที่เหลืออยู่ไปหน่อย' : 'ตอนนี้ยังไม่พอ'}`;
+                const chips = [];
+                if (as.cutGame) {
+                    const g = as.game0, left = Math.max(0, g.amount - as.cutGame);
+                    msg += `<br><br>ถ้าช่วงนี้ลดเติมเกมลงสัก ${baht(as.cutGame)} บาท (จาก${PERIOD_WORD[g.period]}ละ ${baht(g.amount)} เหลือ ${baht(left)}) ก็จะพอเก็บทัน`;
+                    chips.push(`ลดเติมเกมเหลือ${PERIOD_WORD[g.period]}ละ ${left}`);
+                }
+                if (as.daysNeeded) {
+                    msg += `<br>${as.cutGame ? 'หรือ' : ''}ถ้าไม่อยากลดอะไร ขยายเวลาเป็นประมาณ ${as.daysNeeded} วันก็จะสบายขึ้นเยอะ`;
+                    chips.push(`ขยายเป็น ${as.daysNeeded} วัน`);
+                }
+                if (as.free <= 0) msg += '<br>ตอนนี้รายจ่ายเท่ากับหรือมากกว่ารายได้แล้ว ลองดูว่ามีค่าอะไรที่พอลดได้บ้างก่อนนะ';
+                addBot(msg + (itemNote ? `<br><span class="text-gray-500 text-[12px]">${itemNote}</span>` : ''));
+                return setChips([...chips, 'ทำตารางตามนี้เลย', 'เริ่มใหม่']);
+            }
+
+            let intro;
+            if (as) {
+                const spare = as.free - as.need;
+                intro = `${financeLine(finance, as)} ${goalPhrase}ใน ${days} วัน ก็เก็บ${describeAmounts(plan)}`;
+                if (as.need > as.free * 0.8) intro += ' ค่อนข้างตึงอยู่นะ วันไหนใช้เยอะก็ลองประหยัดเพิ่มนิดนึง';
+                else if (gameMentioned && as.game === 0) intro += ` ยังเหลือไว้เติมเกมได้สบาย ๆ (เหลือใช้อีกวันละราว ${baht(Math.round(spare))} บาท)`;
+                else intro += ` แล้วยังเหลือใช้อีกวันละราว ${baht(Math.round(spare))} บาท สบาย ๆ`;
+            } else {
+                intro = `${req.label ? `${what} ` : `${baht(plan.total)} บาท `}ใน ${days} วัน เก็บ${describeAmounts(plan)}ก็ถึงแล้ว`;
+                if (req.excluded && req.excluded.length) intro += ` (เว้นวัน${req.excluded.map(d => DAY_FULL[d]).join(', ')}ให้แล้ว)`;
+                if (!finance) intro += '<br><span class="text-gray-500 text-[12px]">ถ้าอยากให้ช่วยดูว่าไหวไหม บอกเงินเดือนกับค่าใช้จ่ายต่อวันมาได้นะ</span>';
+            }
+            if (itemNote) intro += `<br><span class="text-gray-500 text-[12px]">${itemNote}</span>`;
+            addBot(intro);
+
             plan.id = 'p' + Date.now().toString(36);
-            plan.headline = describeHeadline(plan);
+            plan.headline = `ตารางออม${req.label ? ' · ' + req.label : ''}`;
             plans[plan.id] = plan;
             addBot(cardHTML(plan), { wide: true, id: `card-${plan.id}` });
-            setChips(['ขอยอดเท่ากันทุกครั้ง', 'เปลี่ยนเป็นรายสัปดาห์', 'ไม่ออมวันหยุด', 'วันหยุดออมมากกว่า', 'เริ่มใหม่']);
+            setChips(['เปลี่ยนเป็นรายสัปดาห์', 'ขยายเป็น 2 อาทิตย์', 'ไม่เก็บวันหยุด', 'เริ่มพรุ่งนี้', 'เริ่มใหม่']);
         }
 
         function send(text) {
@@ -658,20 +840,19 @@
             if (act === 'prev') p.viewMonth = new Date(p.viewMonth.getFullYear(), p.viewMonth.getMonth() - 1, 1);
             if (act === 'next') p.viewMonth = new Date(p.viewMonth.getFullYear(), p.viewMonth.getMonth() + 1, 1);
             if (act === 'toggle') p.expanded = !p.expanded;
-            if (act === 'reroll') {
-                const np = buildPlan(p.req, Math.floor(Math.random() * 1e9));
-                if (!np.error) { p.items = np.items; p.total = np.total; }
-            }
             if (act === 'save') {
                 if (p.saving || p.saved) return;
                 p.saving = true;
                 b.disabled = true; b.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>กำลังบันทึก...';
                 savePlan(p).then(() => {
                     p.saving = false; p.saved = true; renderCard(p);
-                    botReply(() => addBot('บันทึกเป้าหมายเรียบร้อย! 🎉 ไปดูความคืบหน้าได้ที่หน้า <a href="dashboard.html" class="font-semibold text-[#9c8a7e] underline">ติดตาม</a> เริ่มออมวันแรกกันเลย สู้ๆ!'));
+                    botReply(() => addBot(pick([
+                        'บันทึกให้แล้ว หยอดกระปุกเมื่อไหร่ก็ไปติ๊กที่หน้า <a href="dashboard.html" class="font-semibold text-[#9c8a7e] underline">ติดตาม</a> นะ',
+                        'เรียบร้อย เก็บไว้ในหน้า <a href="dashboard.html" class="font-semibold text-[#9c8a7e] underline">ติดตาม</a> แล้ว วันนี้เริ่มวันแรกเลยไหม?'
+                    ])));
                 }, err => {
                     p.saving = false; renderCard(p);
-                    addBot(`บันทึกไม่สำเร็จ 😢 ${esc(err.message)} ลองใหม่อีกครั้งนะ`);
+                    addBot(`บันทึกไม่ได้ ${esc(err.message)} ลองกดอีกทีนะ`);
                 });
                 return;
             }
@@ -680,9 +861,11 @@
 
         // ข้อความต้อนรับ (หลังโหลดข้อมูลผู้ใช้เสร็จ)
         AOMSUK.onReady(() => {
-        addBot(`<p class="font-semibold text-[#9c8a7e]">สวัสดี ${esc(AOMSUK.displayName())}! ฉันคือผู้ช่วยออมเงินของ AOMSUK 🐷</p>
-            <p>บอกเป้าหมายการออมมาเป็นประโยคเดียวได้เลย ทั้ง <b>ยอดเงิน</b> <b>ระยะเวลา</b> และ<b>เงื่อนไข</b> แบบรายวัน รายสัปดาห์ หรือรายเดือน แล้วฉันจะจัดตารางให้ทันที</p>
-            <p class="text-[12px] text-gray-600">ลองแตะตัวอย่างด้านล่าง หรือพิมพ์ "ช่วย" เพื่อดูคำสั่งทั้งหมด</p>`);
+        finance = AOMSUK.finance();
+        const b0 = budgetOf(finance);
+        addBot(`หวัดดี ${esc(AOMSUK.displayName())} ช่วงนี้อยากเก็บเงินไว้ซื้ออะไรเหรอ?<br>${b0
+            ? `<span class="text-[13px] text-gray-600">${b0.free >= 1 ? `จากที่เคยเล่าไว้ ตอนนี้น่าจะเหลือเก็บได้วันละราว ${baht(Math.round(b0.free))} บาท` : 'จากที่เคยเล่าไว้ ตอนนี้รายจ่ายเกือบเท่ารายได้เลย'} ถ้าอะไรเปลี่ยนก็บอกได้นะ</span>`
+            : '<span class="text-[13px] text-gray-600">ถ้าเล่าเงินเดือนหรือค่าขนมกับค่าใช้จ่ายต่อวันมาด้วย จะช่วยคิดให้ว่าเก็บวันละเท่าไหร่ถึงไม่ลำบาก</span>'}`);
         setChips(EXAMPLES);
 
         // เปิดจากหน้าอื่นพร้อมคำสั่ง เช่น chat.html?q=ออม 390 บาท ใน 1 เดือน
