@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AOMSUK - Login</title>
-    <script src="firebase-config.js"></script>
-    <script src="app.js"></script>
-    <script>window.AOMSUK && AOMSUK.authState().then(u => { if (u && !window.__aomsukBusy) location.replace('dashboard.html'); });</script>
+    <!-- โหลดไฟล์เวอร์ชันล่าสุดเสมอ (กันมือถือ/iPad ใช้ไฟล์เก่าที่จำไว้) -->
+    <script>(function () { var v = ''; try { v = (localStorage.getItem('aomsuk_build') || '').slice(0, 7); } catch (e) { } var q = v ? '?v=' + v : ''; document.write('<script src="firebase-config.js' + q + '"><\/script><script src="app.js' + q + '"><\/script>'); })();</script>
+    <script>window.AOMSUK && AOMSUK.authState().then(u => { if (u && !window.__aomsukBusy) AOMSUK.goReplace('dashboard.html'); });</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -87,7 +87,7 @@
             if (!pw) return fail('กรุณากรอกรหัสผ่าน', 'password');
             $btn.disabled = true; $btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> กำลังเข้าสู่ระบบ...';
             const res = await AOMSUK.login(email, pw);
-            if (res.ok) return location.replace('dashboard.html');
+            if (res.ok) return AOMSUK.goReplace('dashboard.html');
             $btn.disabled = false; $btn.textContent = 'เข้าสู่ระบบ';
             fail(res.error, res.field);
         });

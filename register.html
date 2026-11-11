@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AOMSUK - Register</title>
-    <script src="firebase-config.js"></script>
-    <script src="app.js"></script>
-    <script>window.AOMSUK && AOMSUK.authState().then(u => { if (u && !window.__aomsukBusy) location.replace('dashboard.html'); });</script>
+    <!-- โหลดไฟล์เวอร์ชันล่าสุดเสมอ (กันมือถือ/iPad ใช้ไฟล์เก่าที่จำไว้) -->
+    <script>(function () { var v = ''; try { v = (localStorage.getItem('aomsuk_build') || '').slice(0, 7); } catch (e) { } var q = v ? '?v=' + v : ''; document.write('<script src="firebase-config.js' + q + '"><\/script><script src="app.js' + q + '"><\/script>'); })();</script>
+    <script>window.AOMSUK && AOMSUK.authState().then(u => { if (u && !window.__aomsukBusy) AOMSUK.goReplace('dashboard.html'); });</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -121,7 +121,7 @@
                     <p class="font-bold text-[#9c8a7e] text-lg">สมัครสมาชิกสำเร็จ!</p>
                     <p class="text-sm text-gray-500 mt-1">ยินดีต้อนรับ ${name.replace(/[&<>"']/g, '')} กำลังพาไปตั้งเป้าหมายแรก...</p>
                 </div>`;
-                return setTimeout(() => location.replace('add-goal.html'), 1300);
+                return setTimeout(() => AOMSUK.goReplace('add-goal.html'), 1300);
             }
             $btn.disabled = false; $btn.textContent = 'สมัครสมาชิก';
             fail(res.error, res.field === 'email' ? $email : null);
