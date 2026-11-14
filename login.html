@@ -78,7 +78,7 @@
             if (!res.ok) return fail(res.error, res.field);
             $err.classList.add('hidden');
             const n = document.getElementById('notice');
-            n.textContent = `ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ ${email} แล้ว (ถ้าไม่เจอ ลองดูในโฟลเดอร์ Spam)`;
+            n.textContent = `ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ ${email} แล้ว ใช้ลิงก์ในอีเมลฉบับล่าสุดภายใน 1 ชั่วโมง (ถ้าไม่เจอ ลองดูในโฟลเดอร์ Spam/จดหมายขยะ)`;
             n.classList.remove('hidden');
         });
 

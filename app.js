@@ -15,7 +15,7 @@
 (function () {
     const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
     const page = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
-    const PUBLIC = /^(index|login|register)\.html$/.test(page);
+    const PUBLIC = /^(index|login|register|reset)\.html$/.test(page);
 
     const DEFAULT_SETTINGS = { notifyDue: true, notifyMissed: true, notifyGoal: true, notifyWish: true, browserNotif: false };
 
@@ -41,6 +41,10 @@
         'auth/invalid-login-credentials': ['อีเมลหรือรหัสผ่านไม่ถูกต้อง', 'password'],
         'auth/too-many-requests': ['ลองผิดหลายครั้งเกินไป กรุณารอสักครู่แล้วลองใหม่', null],
         'auth/network-request-failed': ['เชื่อมต่ออินเทอร์เน็ตไม่ได้ ลองใหม่อีกครั้ง', null],
+        'auth/expired-action-code': ['ลิงก์นี้หมดอายุแล้ว (ใช้ได้ภายใน 1 ชั่วโมง) กรุณาขอลิงก์ใหม่', null],
+        'auth/invalid-action-code': ['ลิงก์นี้ใช้ไม่ได้แล้ว อาจเคยใช้ไปแล้ว หรือมีการขอลิงก์ใหม่หลังจากนี้ กรุณาใช้ลิงก์ในอีเมลฉบับล่าสุด หรือขอลิงก์ใหม่', null],
+        'auth/user-disabled': ['บัญชีนี้ถูกระงับการใช้งาน', null],
+        'auth/unauthorized-continue-uri': ['ยังไม่ได้เพิ่มชื่อเว็บใน Authorized domains ของ Firebase', null],
         'auth/requires-recent-login': ['เพื่อความปลอดภัย กรุณาออกจากระบบแล้วเข้าใหม่ก่อนทำรายการนี้', null],
         'auth/operation-not-allowed': ['ยังไม่ได้เปิดใช้การล็อกอินด้วยอีเมลใน Firebase Console (Authentication > Sign-in method)', null],
         'auth/configuration-not-found': ['ยังไม่ได้เปิดใช้ Authentication ใน Firebase Console', null],
@@ -362,7 +366,24 @@
         } catch (e) { const [error, field] = errInfo(e); return { error, field }; }
     };
     A.resetPassword = async email => {
-        try { await booted; await fb.authM.sendPasswordResetEmail(fb.auth, email.trim()); return { ok: true }; }
+        try {
+            await booted;
+            fb.auth.languageCode = 'th';   // อีเมลเป็นภาษาไทย
+            // แนบลิงก์กลับเข้าเว็บเรา (ถ้าโดเมนยังไม่ได้อนุญาต จะส่งแบบปกติแทน)
+            const back = { url: new URL('login.html', location.href).href };
+            try { await fb.authM.sendPasswordResetEmail(fb.auth, email.trim(), back); }
+            catch (e) { if (/continue-uri|unauthorized|invalid-continue/.test(e.code || '')) await fb.authM.sendPasswordResetEmail(fb.auth, email.trim()); else throw e; }
+            return { ok: true };
+        }
+        catch (e) { const [error, field] = errInfo(e); return { error, field }; }
+    };
+    // ใช้ในหน้า reset.html (ตั้งรหัสผ่านใหม่จากลิงก์ในอีเมล)
+    A.checkResetCode = async code => {
+        try { await booted; return { ok: true, email: await fb.authM.verifyPasswordResetCode(fb.auth, code) }; }
+        catch (e) { const [error] = errInfo(e); return { error }; }
+    };
+    A.confirmReset = async (code, password) => {
+        try { await booted; await fb.authM.confirmPasswordReset(fb.auth, code, password); return { ok: true }; }
         catch (e) { const [error, field] = errInfo(e); return { error, field }; }
     };
     A.logout = async () => { await booted; await fb.authM.signOut(fb.auth); A.goReplace('login.html'); };

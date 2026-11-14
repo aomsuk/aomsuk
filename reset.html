@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AOMSUK - ตั้งรหัสผ่านใหม่</title>
+    <!-- โหลดไฟล์เวอร์ชันล่าสุดเสมอ (กันมือถือ/iPad ใช้ไฟล์เก่าที่จำไว้) -->
+    <script>(function () { var v = ''; try { v = (localStorage.getItem('aomsuk_build') || '').slice(0, 7); } catch (e) { } var q = v ? '?v=' + v : ''; document.write('<script src="firebase-config.js' + q + '"><\/script><script src="app.js' + q + '"><\/script>'); })();</script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400..700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai+Looped:wght@400..700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        html { font-size: 17px; } body, button, input, textarea, select { font-family: 'Google Sans', 'Noto Sans Thai Looped', sans-serif; }
+        .shake { animation: shake .3s; }
+        @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+    </style>
+</head>
+<body class="bg-[#d8eafe] min-h-screen flex flex-col">
+    <div class="bg-[#9c8a7e] py-4 flex justify-center items-center shadow-md">
+        <h1 class="text-2xl font-bold text-white tracking-widest flex items-center gap-2">
+            AOMSUK <i class="fa-solid fa-piggy-bank text-white"></i>
+        </h1>
+    </div>
+    <div class="flex-1 flex flex-col items-center justify-center p-6">
+        <div id="card" class="bg-white w-full max-w-sm rounded-[30px] p-8 shadow-lg border border-gray-100">
+            <div class="text-center py-6 text-gray-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i><p class="mt-2">กำลังตรวจสอบลิงก์...</p></div>
+        </div>
+    </div>
+
+    <script>
+        // หน้านี้เปิดจากลิงก์ "ตั้งรหัสผ่านใหม่" ในอีเมลที่ Firebase ส่งให้
+        // (ต้องตั้งค่า Customize action URL ใน Firebase Console ให้ชี้มาที่หน้านี้ ดูในคู่มือ)
+        const $card = document.getElementById('card');
+        const params = new URLSearchParams(location.search);
+        const mode = params.get('mode'), code = params.get('oobCode');
+        const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        function showMessage(icon, title, text, btnText = 'ไปหน้าเข้าสู่ระบบ') {
+            $card.innerHTML = `<div class="text-center py-4">
+                <div class="text-5xl mb-3">${icon}</div>
+                <p class="font-bold text-[#9c8a7e] text-lg">${title}</p>
+                <p class="text-sm text-gray-600 mt-2 leading-relaxed">${text}</p>
+                <a href="login.html" class="inline-block mt-5 bg-[#9c8a7e] text-white font-semibold px-6 py-3 rounded-2xl shadow-md">${btnText}</a>
+            </div>`;
+        }
+
+        async function init() {
+            if (mode !== 'resetPassword' || !code) {
+                return showMessage('🔗', 'ลิงก์ไม่ครบ', 'เปิดลิงก์จากอีเมลอีกครั้ง หรือขอลิงก์ตั้งรหัสผ่านใหม่ที่หน้าเข้าสู่ระบบ (กด "ลืมรหัสผ่าน?")');
+            }
+            const res = await AOMSUK.checkResetCode(code);
+            if (!res.ok) return showMessage('⏰', 'ลิงก์นี้ใช้ไม่ได้แล้ว', esc(res.error), 'ขอลิงก์ใหม่');
+
+            $card.innerHTML = `<h2 class="text-center font-bold text-[#9c8a7e] text-lg mb-1">ตั้งรหัสผ่านใหม่</h2>
+                <p class="text-center text-sm text-gray-500 mb-5">สำหรับ ${esc(res.email)}</p>
+                <form id="resetForm" class="space-y-4" novalidate>
+                    <div class="relative">
+                        <input id="pw" type="password" autocomplete="new-password" placeholder="รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)" class="w-full px-4 py-3 pr-12 bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
+                        <button type="button" id="togglePw" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-8 h-8" aria-label="แสดงรหัสผ่าน"><i class="fa-solid fa-eye"></i></button>
+                    </div>
+                    <input id="pw2" type="password" autocomplete="new-password" placeholder="ยืนยันรหัสผ่านใหม่" class="w-full px-4 py-3 bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
+                    <p id="err" class="hidden text-sm text-red-500 text-center"></p>
+                    <button id="saveBtn" class="w-full bg-[#9c8a7e] text-white font-semibold py-3 rounded-2xl shadow-md disabled:opacity-60">บันทึกรหัสผ่านใหม่</button>
+                </form>`;
+            const $pw = document.getElementById('pw'), $pw2 = document.getElementById('pw2'), $err = document.getElementById('err'), $btn = document.getElementById('saveBtn');
+            $pw.focus();
+            document.getElementById('togglePw').addEventListener('click', e => {
+                const show = $pw.type === 'password';
+                $pw.type = $pw2.type = show ? 'text' : 'password';
+                e.currentTarget.innerHTML = `<i class="fa-solid ${show ? 'fa-eye-slash' : 'fa-eye'}"></i>`;
+            });
+            const fail = msg => { $err.textContent = msg; $err.classList.remove('hidden'); $card.classList.remove('shake'); void $card.offsetWidth; $card.classList.add('shake'); };
+            document.getElementById('resetForm').addEventListener('submit', async e => {
+                e.preventDefault();
+                if ($pw.value.length < 8) return fail('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร');
+                if ($pw.value !== $pw2.value) return fail('ยืนยันรหัสผ่านไม่ตรงกัน');
+                $btn.disabled = true; $btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> กำลังบันทึก...';
+                const r = await AOMSUK.confirmReset(code, $pw.value);
+                if (!r.ok) { $btn.disabled = false; $btn.textContent = 'บันทึกรหัสผ่านใหม่'; return fail(r.error); }
+                try { localStorage.setItem('aomsuk_last_email', res.email); } catch (x) { }
+                showMessage('🎉', 'เปลี่ยนรหัสผ่านเรียบร้อย', 'เข้าสู่ระบบด้วยรหัสผ่านใหม่ได้เลย');
+            });
+        }
+        if (window.AOMSUK && AOMSUK.checkResetCode) init();
+    </script>
+</body>
+</html>
