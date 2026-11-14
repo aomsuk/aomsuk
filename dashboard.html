@@ -78,14 +78,14 @@
         <!-- เงินออมปัจจุบัน -->
         <div class="bg-white rounded-3xl p-6 pr-28 shadow-sm flex items-center relative min-h-[120px]">
             <div class="w-full">
-                <p class="text-gray-600 font-medium text-base">เงินออมปัจจุบัน</p>
-                <h2 id="currentSavings" class="text-3xl font-bold text-gray-800">0.00 BATH</h2>
+                <p class="text-gray-600 font-medium text-sm">เงินออมปัจจุบัน</p>
+                <h2 id="currentSavings" class="text-2xl font-bold text-gray-800">0.00 BATH</h2>
             </div>
             <a href="settings.html#profile" class="absolute right-4 top-[-18px] flex flex-col items-center" aria-label="โปรไฟล์">
-                <div id="avatarCircle" class="w-24 h-24 bg-gray-200 rounded-full border-4 border-white shadow-md flex items-center justify-center overflow-hidden text-3xl">
+                <div id="avatarCircle" class="w-24 h-24 bg-gray-200 rounded-full border-4 border-white shadow-md flex items-center justify-center overflow-hidden text-2xl">
                     <i class="fa-solid fa-cat text-[#9c8a7e]"></i>
                 </div>
-                <p id="avatarName" class="text-sm text-gray-600 font-semibold mt-1 max-w-[96px] truncate">PEAK</p>
+                <p id="avatarName" class="text-xs text-gray-600 font-semibold mt-1 max-w-[96px] truncate">PEAK</p>
             </a>
         </div>
 
@@ -96,26 +96,26 @@
         <div class="space-y-4">
             <!-- ตารางออมเงิน -->
             <div id="scheduleBox" class="bg-[#9c8a7e] rounded-3xl p-4 text-white shadow-sm border-4 border-[#9c8a7e] scroll-mt-20">
-                <h3 class="font-bold text-center mb-3 text-lg">ตารางออมเงิน</h3>
-                <div id="scheduleList" class="space-y-2 text-base bg-white text-gray-800 p-4 rounded-2xl max-h-80 overflow-y-auto"></div>
+                <h3 class="font-bold text-center mb-3 text-base">ตารางออมเงิน</h3>
+                <div id="scheduleList" class="space-y-2 text-sm bg-white text-gray-800 p-4 rounded-2xl max-h-80 overflow-y-auto"></div>
             </div>
 
             <!-- รายการออม -->
             <div class="bg-[#fcefdc] rounded-3xl p-4 text-gray-800 shadow-sm border-4 border-[#fcefdc]">
-                <h3 class="font-bold text-center mb-3 text-lg">รายการออม</h3>
-                <div id="historyList" class="space-y-2 text-base bg-[#fdf3e6] p-4 rounded-2xl max-h-80 overflow-y-auto"></div>
+                <h3 class="font-bold text-center mb-3 text-base">รายการออม</h3>
+                <div id="historyList" class="space-y-2 text-sm bg-[#fdf3e6] p-4 rounded-2xl max-h-80 overflow-y-auto"></div>
             </div>
         </div>
 
         <!-- เป้าหมายของคุณ (หน้าหลัก) -->
         <div class="goal-container">
             <div class="goal-header">
-                <h3 class="font-bold text-[#9c8a7e] text-lg">เป้าหมายของคุณ</h3>
+                <h3 class="font-bold text-[#9c8a7e] text-base">เป้าหมายของคุณ</h3>
             </div>
-            <div class="text-right text-xs text-gray-500 mb-2">highest price</div>
+            <div class="text-right text-[11px] text-gray-500 mb-2">highest price</div>
             <div id="wishTop" class="space-y-4"></div>
             <div id="moreBtnWrap" class="text-center mt-6">
-                <button onclick="openGoalPopup()" class="font-bold text-gray-600 text-sm underline decoration-2 underline-offset-4 hover:text-gray-800 transition-colors">
+                <button onclick="openGoalPopup()" class="font-bold text-gray-600 text-xs underline decoration-2 underline-offset-4 hover:text-gray-800 transition-colors">
                     เพิ่มเติม.....
                 </button>
             </div>
@@ -125,7 +125,7 @@
     <!-- ปุ่มเพิ่มเป้าหมาย (ลอยอยู่มุมขวาล่าง) -->
     <div class="fixed bottom-6 right-6 z-20">
         <a href="add-goal.html" class="bg-[#7b8994] text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 font-bold text-sm hover:bg-[#637079] transition-colors">
-            <i class="fa-solid fa-square-plus text-lg"></i>
+            <i class="fa-solid fa-square-plus text-base"></i>
             เพิ่มเป้าหมาย
         </a>
     </div>
@@ -134,18 +134,18 @@
     <div id="goalPopup" class="fixed inset-0 bg-black/50 z-50 hidden flex flex-col items-center justify-center p-4">
         <div class="bg-white rounded-[2rem] w-full max-w-md overflow-hidden relative shadow-2xl">
             <div class="flex items-center p-4 border-b-2 border-[#9c8a7e] mx-4 mb-2">
-                <button onclick="closeGoalPopup()" class="text-2xl text-gray-600 focus:outline-none">
+                <button onclick="closeGoalPopup()" class="text-xl text-gray-600 focus:outline-none">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
-                <h3 class="flex-1 text-center font-bold text-[#9c8a7e] text-lg mr-6">เป้าหมายของคุณ</h3>
+                <h3 class="flex-1 text-center font-bold text-[#9c8a7e] text-base mr-6">เป้าหมายของคุณ</h3>
             </div>
-            <div class="px-6 pb-6 pt-2 text-right text-xs text-gray-500 mb-1">highest price</div>
+            <div class="px-6 pb-6 pt-2 text-right text-[11px] text-gray-500 mb-1">highest price</div>
             <div id="wishAll" class="px-6 pb-8 space-y-5 overflow-y-auto max-h-[60vh]"></div>
         </div>
     </div>
 
     <!-- Toast -->
-    <div id="toast" class="hidden fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-gray-800/90 text-white text-sm px-4 py-2 rounded-full shadow-lg whitespace-nowrap"></div>
+    <div id="toast" class="hidden fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-gray-800/90 text-white text-xs px-4 py-2 rounded-full shadow-lg whitespace-nowrap"></div>
 
     <script>
         // ---------------- Sidebar & Popup ----------------
@@ -163,8 +163,9 @@
         const A = AOMSUK;
         const ACTIVE_KEY = 'aomsuk_active_goal';
         let activeId = null;
-        try { activeId = localStorage.getItem(ACTIVE_KEY); } catch (e) { }
-        const setActive = id => { activeId = id; try { localStorage.setItem(ACTIVE_KEY, id || ''); } catch (e) { } };
+        // เลือกเองได้ระหว่างใช้งาน แต่เปิดหน้าใหม่จะกลับไปยึดเป้าหมายที่ราคาแพงที่สุดเป็นหลัก
+        try { activeId = sessionStorage.getItem(ACTIVE_KEY); } catch (e) { }
+        const setActive = id => { activeId = id; try { sessionStorage.setItem(ACTIVE_KEY, id || ''); } catch (e) { } };
 
         // ---------------- Helpers ----------------
         const esc = A.esc, money = A.money, savedOf = A.savedOf;
@@ -177,14 +178,15 @@
         // รายการในส่วนแผน = แผนการออม + เป้าหมายที่เพิ่มเองแต่ยังไม่มีตาราง
         const norm = s => String(s || '').trim().toLowerCase();
         const hasPlan = w => A.goals.some(g => g.wishId === w.id || norm(g.title) === norm(w.name));
+        // เรียงจากราคาแพงสุด -> ถูกสุด
         const entries = () => [
-            ...A.goals.map(g => ({ key: g.id, kind: 'plan', title: g.title, g })),
-            ...A.wishlist.filter(w => !hasPlan(w)).map(w => ({ key: 'w:' + w.id, kind: 'wish', title: w.name, w }))
-        ];
-        const activeEntry = () => { const es = entries(); return es.find(e => e.key === activeId) || es.filter(e => e.kind === 'plan').pop() || es[0] || null; };
+            ...A.goals.map(g => ({ key: g.id, kind: 'plan', title: g.title, price: +g.target || 0, g })),
+            ...A.wishlist.filter(w => !hasPlan(w)).map(w => ({ key: 'w:' + w.id, kind: 'wish', title: w.name, price: +w.price || 0, w }))
+        ].sort((a, b) => b.price - a.price);
+        const activeEntry = () => { const es = entries(); return es.find(e => e.key === activeId) || es[0] || null; };
         const activeGoal = () => { const e = activeEntry(); return e && e.kind === 'plan' ? e.g : null; };
         const planLink = w => `chat.html?q=${encodeURIComponent(`ออม ${w.price} บาท ใน 1 เดือน เพื่อซื้อ ${w.name}`)}`;
-        const wishThumb = (w, cls) => w.image ? `<img src="${w.image}" alt="" class="${cls} rounded-2xl object-cover shrink-0">` : `<span class="${cls} rounded-2xl bg-[#f4efe9] flex items-center justify-center text-3xl shrink-0">${esc(w.emoji || '🎯')}</span>`;
+        const wishThumb = (w, cls) => w.image ? `<img src="${w.image}" alt="" class="${cls} rounded-2xl object-cover shrink-0">` : `<span class="${cls} rounded-2xl bg-[#f4efe9] flex items-center justify-center text-2xl shrink-0">${esc(w.emoji || '🎯')}</span>`;
 
         function toast(msg) {
             const t = document.getElementById('toast');
@@ -206,7 +208,7 @@
             const es = entries();
             if (es.length < 2) return '';
             return `<div class="flex gap-2 overflow-x-auto pb-1">${es.map(x => `
-                <button data-goal="${esc(x.key)}" class="shrink-0 text-sm px-3 py-1.5 rounded-full border ${x.key === curKey ? 'bg-[#9c8a7e] text-white border-[#9c8a7e]' : 'bg-white text-[#7a6a5f] border-[#d9cfc7]'}">${x.kind === 'wish' ? '🎯 ' : ''}${esc(x.title)}</button>`).join('')}</div>`;
+                <button data-goal="${esc(x.key)}" class="shrink-0 text-xs px-3 py-1.5 rounded-full border ${x.key === curKey ? 'bg-[#9c8a7e] text-white border-[#9c8a7e]' : 'bg-white text-[#7a6a5f] border-[#d9cfc7]'}">${x.kind === 'wish' ? '🎯 ' : ''}${esc(x.title)}</button>`).join('')}</div>`;
         }
         function renderPlan() {
             const el = document.getElementById('planSection');
@@ -218,13 +220,13 @@
                     <div class="flex items-start gap-3">
                         ${wishThumb(w, 'w-16 h-16')}
                         <div class="flex-1 min-w-0">
-                            <p class="font-bold text-gray-800 text-lg truncate">${esc(w.name)}</p>
-                            <p class="text-sm text-gray-500">เป้าหมาย ${(+w.price).toLocaleString('th-TH')} บาท · ยังไม่มีตารางออม</p>
+                            <p class="font-bold text-gray-800 text-base truncate">${esc(w.name)}</p>
+                            <p class="text-xs text-gray-500">เป้าหมาย ${(+w.price).toLocaleString('th-TH')} บาท · ยังไม่มีตารางออม</p>
                         </div>
-                        <button data-delwish="${esc(w.id)}" class="text-gray-400 hover:text-red-500 text-lg px-1" aria-label="ลบเป้าหมาย"><i class="fa-solid fa-trash-can"></i></button>
+                        <button data-delwish="${esc(w.id)}" class="text-gray-400 hover:text-red-500 text-base px-1" aria-label="ลบเป้าหมาย"><i class="fa-solid fa-trash-can"></i></button>
                     </div>
                     <div>
-                        <div class="flex justify-between text-sm mb-1"><span class="text-gray-600">เงินออมรวม ${money(total)} / ${money(w.price)} ฿</span><span class="font-bold text-[#9c8a7e]">${pct}%</span></div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-gray-600">เงินออมรวม ${money(total)} / ${money(w.price)} ฿</span><span class="font-bold text-[#9c8a7e]">${pct}%</span></div>
                         <div class="h-3 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-[#9c8a7e] rounded-full" style="width:${pct}%"></div></div>
                     </div>
                     <a href="${planLink(w)}" class="block text-center bg-[#9c8a7e] text-white font-bold rounded-full py-2.5"><i class="fa-solid fa-comment-dots mr-1"></i>ให้แชทบอทจัดตารางออมให้</a>`;
@@ -233,8 +235,8 @@
             const g = activeGoal();
             if (!g) {
                 el.innerHTML = `<div class="text-center py-2">
-                    <p class="text-gray-600 text-sm mb-3">ยังไม่มีแผนการออมเลย ให้แชทบอทช่วยจัดตารางให้สิ 🐷</p>
-                    <a href="chat.html" class="inline-flex items-center gap-2 bg-[#9c8a7e] text-white text-sm font-bold px-4 py-2 rounded-full"><i class="fa-solid fa-comment-dots"></i> สร้างแผนกับแชทบอท</a>
+                    <p class="text-gray-600 text-xs mb-3">ยังไม่มีแผนการออมเลย ให้แชทบอทช่วยจัดตารางให้สิ 🐷</p>
+                    <a href="chat.html" class="inline-flex items-center gap-2 bg-[#9c8a7e] text-white text-xs font-bold px-4 py-2 rounded-full"><i class="fa-solid fa-comment-dots"></i> สร้างแผนกับแชทบอท</a>
                 </div>`;
                 return;
             }
@@ -246,21 +248,21 @@
             el.innerHTML = `${pills}
                 <div class="flex items-start justify-between gap-2">
                     <div>
-                        <p class="font-bold text-gray-800 text-lg">${esc(g.title)}</p>
-                        <p class="text-sm text-gray-500">${FREQ[g.frequency] || ''} · ${thShort(parseKey(g.startDate))} – ${thShort(parseKey(g.endDate))}</p>
+                        <p class="font-bold text-gray-800 text-base">${esc(g.title)}</p>
+                        <p class="text-xs text-gray-500">${FREQ[g.frequency] || ''} · ${thShort(parseKey(g.startDate))} – ${thShort(parseKey(g.endDate))}</p>
                     </div>
-                    <button data-del="${esc(g.id)}" class="text-gray-400 hover:text-red-500 text-lg px-1" aria-label="ลบแผน"><i class="fa-solid fa-trash-can"></i></button>
+                    <button data-del="${esc(g.id)}" class="text-gray-400 hover:text-red-500 text-base px-1" aria-label="ลบแผน"><i class="fa-solid fa-trash-can"></i></button>
                 </div>
                 <div>
-                    <div class="flex justify-between text-sm mb-1"><span class="text-gray-600">${money(saved)} / ${money(g.target)} ฿</span><span class="font-bold text-[#9c8a7e]">${pct}%</span></div>
+                    <div class="flex justify-between text-xs mb-1"><span class="text-gray-600">${money(saved)} / ${money(g.target)} ฿</span><span class="font-bold text-[#9c8a7e]">${pct}%</span></div>
                     <div class="h-3 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-[#9c8a7e] rounded-full transition-all duration-500" style="width:${pct}%"></div></div>
                 </div>
-                <div class="grid grid-cols-3 gap-2 text-center text-sm">
-                    <div class="bg-[#f4efe9] rounded-xl py-2"><div class="font-bold text-xl text-gray-800">${done}</div>ออมแล้ว</div>
-                    <div class="bg-[#f4efe9] rounded-xl py-2"><div class="font-bold text-xl text-gray-800">${left}</div>เหลืออีก</div>
-                    <div class="bg-[#f4efe9] rounded-xl py-2"><div class="font-bold text-xl ${missed ? 'text-[#cc9c94]' : 'text-gray-800'}">${missed}</div>พลาดไป</div>
+                <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div class="bg-[#f4efe9] rounded-xl py-2"><div class="font-bold text-lg text-gray-800">${done}</div>ออมแล้ว</div>
+                    <div class="bg-[#f4efe9] rounded-xl py-2"><div class="font-bold text-lg text-gray-800">${left}</div>เหลืออีก</div>
+                    <div class="bg-[#f4efe9] rounded-xl py-2"><div class="font-bold text-lg ${missed ? 'text-[#cc9c94]' : 'text-gray-800'}">${missed}</div>พลาดไป</div>
                 </div>
-                ${pct >= 100 ? '<p class="text-center text-sm font-bold text-green-600">🎉 ถึงเป้าหมายแล้ว เก่งมาก!</p>' : ''}`;
+                ${pct >= 100 ? '<p class="text-center text-xs font-bold text-green-600">🎉 ถึงเป้าหมายแล้ว เก่งมาก!</p>' : ''}`;
         }
 
         // ---------------- Render: ตารางออมเงิน ----------------
@@ -271,8 +273,8 @@
             if (!g) {
                 const e = activeEntry();
                 el.innerHTML = e && e.kind === 'wish'
-                    ? `<div class="text-center py-4"><p class="text-base text-gray-600 mb-3">"${esc(e.w.name)}" ยังไม่มีตารางออม</p><a href="${planLink(e.w)}" class="inline-block bg-[#9c8a7e] text-white font-semibold rounded-full px-5 py-2">จัดตารางกับแชทบอท</a></div>`
-                    : '<p class="text-center text-base text-gray-500 py-4">ยังไม่มีตาราง</p>';
+                    ? `<div class="text-center py-4"><p class="text-sm text-gray-600 mb-3">"${esc(e.w.name)}" ยังไม่มีตารางออม</p><a href="${planLink(e.w)}" class="inline-block bg-[#9c8a7e] text-white font-semibold rounded-full px-5 py-2">จัดตารางกับแชทบอท</a></div>`
+                    : '<p class="text-center text-sm text-gray-500 py-4">ยังไม่มีตาราง</p>';
                 lastScrolledGoal = null;
                 return;
             }
@@ -281,8 +283,8 @@
                 const d = parseKey(it.date), isToday = it.date === todayKey, past = it.date < todayKey;
                 const icon = it.saved ? 'fa-solid fa-square-check text-[#9c8a7e]' : past ? 'fa-regular fa-square text-[#cc9c94]' : 'fa-solid fa-square text-gray-400';
                 return `<div data-idx="${i}" class="flex justify-between items-center gap-2 py-1 ${i < g.schedule.length - 1 ? 'border-b border-gray-200 pb-2' : ''} ${isToday ? 'bg-yellow-50 -mx-2 px-2 rounded-lg' : ''}">
-                    <span class="font-bold text-base leading-tight">${d.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' })}${isToday ? ' <span class="text-xs font-semibold text-yellow-700 bg-yellow-200 rounded-full px-2 py-0.5 ml-1">วันนี้</span>' : ''}</span>
-                    <button data-tick="${i}" class="font-bold text-base text-[#6b7280] whitespace-nowrap flex items-center gap-2">${money(it.amount)} ฿ <i class="${icon} text-2xl"></i></button>
+                    <span class="font-bold text-sm leading-tight">${d.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' })}${isToday ? ' <span class="text-[11px] font-semibold text-yellow-700 bg-yellow-200 rounded-full px-2 py-0.5 ml-1">วันนี้</span>' : ''}</span>
+                    <button data-tick="${i}" class="font-bold text-sm text-[#6b7280] whitespace-nowrap flex items-center gap-2">${money(it.amount)} ฿ <i class="${icon} text-xl"></i></button>
                 </div>`;
             }).join('');
             if (lastScrolledGoal === g.id) { el.scrollTop = keepScroll; return; }
@@ -311,8 +313,8 @@
             if (!rows.length) { el.innerHTML = '<p class="text-center text-gray-500 py-4">ยังไม่มีรายการ<br>ติ๊กช่องในตารางเมื่อออมแล้ว</p>'; return; }
             el.innerHTML = rows.slice(0, 30).map((r, i, arr) => `
                 <div class="flex justify-between items-center py-1 ${i < arr.length - 1 ? 'border-b border-gray-300 pb-2' : ''}">
-                    <div class="flex items-center gap-3 min-w-0"><span class="text-3xl">${r.emoji}</span><div><p class="font-bold text-gray-700 text-base">${r.date}</p><p class="text-sm text-gray-500">${r.time}</p></div></div>
-                    <span class="font-bold text-lg text-gray-800 whitespace-nowrap ml-2">${money(r.amount)} ฿</span>
+                    <div class="flex items-center gap-3 min-w-0"><span class="text-2xl">${r.emoji}</span><div><p class="font-bold text-gray-700 text-sm">${r.date}</p><p class="text-xs text-gray-500">${r.time}</p></div></div>
+                    <span class="font-bold text-base text-gray-800 whitespace-nowrap ml-2">${money(r.amount)} ฿</span>
                 </div>`).join('');
         }
 
@@ -320,18 +322,18 @@
         function wishRow(w, withStatus) {
             const need = Math.max(0, w.price - A.totalSavings());
             const status = need > 0
-                ? `<div class="text-xs text-[#cc9c94]">คุณยังขาดอีก ${need.toLocaleString('th-TH', { maximumFractionDigits: 2 })} บาท</div>`
-                : `<div class="text-xs text-gray-500">คุณสามารถซื้อสินค้านี้ได้!</div>`;
+                ? `<div class="text-[11px] text-[#cc9c94]">คุณยังขาดอีก ${need.toLocaleString('th-TH', { maximumFractionDigits: 2 })} บาท</div>`
+                : `<div class="text-[11px] text-gray-500">คุณสามารถซื้อสินค้านี้ได้!</div>`;
             return `<div class="flex justify-between items-center">
                 <div class="flex items-center gap-3 min-w-0">${w.image
                     ? `<img src="${w.image}" alt="" class="w-12 h-12 rounded-xl object-cover shrink-0">`
-                    : `<span class="text-3xl w-12 text-center shrink-0">${esc(w.emoji || '🎯')}</span>`}<span class="font-bold text-gray-700 text-base truncate">${esc(w.name)}</span></div>
+                    : `<span class="text-2xl w-12 text-center shrink-0">${esc(w.emoji || '🎯')}</span>`}<span class="font-bold text-gray-700 text-sm truncate">${esc(w.name)}</span></div>
                 ${withStatus ? `<div class="text-right"><div class="font-bold text-gray-700">${(+w.price).toLocaleString('th-TH')} THB</div>${status}</div>` : `<span class="font-bold text-gray-700">${(+w.price).toLocaleString('th-TH')} THB</span>`}
             </div>`;
         }
         function renderWishlist() {
             const sorted = [...A.wishlist].sort((a, b) => b.price - a.price);
-            const empty = `<div class="text-center py-2"><p class="text-sm text-gray-500 mb-2">ยังไม่มีเป้าหมาย</p><a href="add-goal.html" class="text-sm font-bold text-[#9c8a7e] underline">+ เพิ่มเป้าหมายแรก</a></div>`;
+            const empty = `<div class="text-center py-2"><p class="text-xs text-gray-500 mb-2">ยังไม่มีเป้าหมาย</p><a href="add-goal.html" class="text-xs font-bold text-[#9c8a7e] underline">+ เพิ่มเป้าหมายแรก</a></div>`;
             document.getElementById('wishTop').innerHTML = sorted.length ? sorted.slice(0, 2).map(w => wishRow(w, false)).join('') : empty;
             document.getElementById('wishAll').innerHTML = sorted.length ? sorted.map(w => wishRow(w, true)).join('') : empty;
             document.getElementById('moreBtnWrap').classList.toggle('hidden', !sorted.length);

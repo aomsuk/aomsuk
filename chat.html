@@ -621,7 +621,10 @@
             const rows = shown.map((it, i) => `<div class="flex justify-between ${i < shown.length - 1 ? 'border-b border-gray-200/80 pb-1' : ''}">
                     <span>${fmtDate(it.date, { weekday: 'short', day: 'numeric', month: 'short' })}</span><span class="font-bold">${fmtMoney(it.amount)} ฿</span></div>`).join('');
             return `
-                <p class="font-semibold text-[#9c8a7e]">${esc(p.headline)}</p>
+                <div class="flex items-center gap-3">
+                    ${p.image ? `<img src="${p.image}" alt="" class="w-12 h-12 rounded-xl object-cover shrink-0">` : ''}
+                    <p class="font-semibold text-[#9c8a7e] flex-1">${esc(p.headline)}</p>
+                </div>
                 ${calendarHTML(p)}
                 <div class="grid grid-cols-3 gap-2 text-center">
                     <div class="bg-white/70 rounded-xl py-2"><div class="text-[10px] text-gray-500">เป้าหมาย</div><div class="font-bold text-sm">${fmtMoney(p.total)}฿</div></div>
@@ -638,7 +641,8 @@
                 <div class="flex gap-2">
                     ${p.saved
                         ? `<a href="dashboard.html" class="flex-1 text-center bg-green-600 text-white rounded-full py-2 text-xs font-semibold"><i class="fa-solid fa-check mr-1"></i>บันทึกแล้ว · ไปหน้าติดตาม</a>`
-                        : `<button data-act="save" data-id="${p.id}" class="flex-1 bg-[#9c8a7e] hover:bg-[#8a7a6f] text-white rounded-full py-2 text-xs font-semibold"><i class="fa-solid fa-floppy-disk mr-1"></i>เอาตารางนี้</button>`}
+                        : `<button data-act="save" data-id="${p.id}" class="flex-1 bg-[#9c8a7e] hover:bg-[#8a7a6f] text-white rounded-full py-2 text-xs font-semibold"><i class="fa-solid fa-floppy-disk mr-1"></i>เอาตารางนี้</button>
+                           <button data-act="img" data-id="${p.id}" class="bg-white border border-[#9c8a7e] text-[#9c8a7e] rounded-full px-3 py-2 text-xs font-semibold"><i class="fa-solid fa-camera mr-1"></i>${p.image ? 'เปลี่ยนรูป' : 'ใส่รูปสินค้า'}</button>`}
                 </div>`;
         }
 
@@ -652,7 +656,10 @@
             let wish = AOMSUK.wishlist.find(w => norm(w.name) === norm(title));
             if (!wish) {
                 wish = { id: AOMSUK.newId(), name: title, price: p.total, emoji: guessEmoji(title), createdAt: new Date().toISOString() };
+                if (p.image) wish.image = p.image;
                 await AOMSUK.saveWish(wish);
+            } else if (p.image && p.image !== wish.image) {
+                await AOMSUK.saveWish({ ...wish, image: p.image });
             }
             const goal = {
                 id: p.id,
@@ -846,6 +853,11 @@
 
             plan.id = 'p' + Date.now().toString(36);
             plan.headline = `ตารางออม${req.label ? ' · ' + req.label : ''}`;
+            if (req.label) {
+                const w0 = AOMSUK.wishlist.find(w => normName(w.name) === normName(req.label));
+                if (pendingImage && normName(pendingItem) === normName(req.label)) plan.image = pendingImage;
+                else if (w0 && w0.image) plan.image = w0.image;
+            }
             plans[plan.id] = plan;
             addBot(cardHTML(plan), { wide: true, id: `card-${plan.id}` });
             setChips(['แก้ข้อมูลรายรับ-รายจ่าย', 'เปลี่ยนเป็นรายสัปดาห์', 'ขยายเป็น 2 อาทิตย์', 'ไม่เก็บวันหยุด', 'เริ่มพรุ่งนี้', 'เริ่มใหม่']);
@@ -868,6 +880,7 @@
             if (act === 'prev') p.viewMonth = new Date(p.viewMonth.getFullYear(), p.viewMonth.getMonth() - 1, 1);
             if (act === 'next') p.viewMonth = new Date(p.viewMonth.getFullYear(), p.viewMonth.getMonth() + 1, 1);
             if (act === 'toggle') p.expanded = !p.expanded;
+            if (act === 'img') { imgTarget = { kind: 'plan', id: p.id }; $img.click(); return; }
             if (act === 'save') {
                 if (p.saving || p.saved) return;
                 p.saving = true;
@@ -890,28 +903,40 @@
         // ---------------- ฟอร์มกรอกรายรับ-รายจ่าย-เป้าหมาย ----------------
         // ข้อมูลในฟอร์มจะ "แทนที่" ของเดิมทั้งหมด (แก้ปัญหาบอทจำข้อมูลเก่า)
         let formSeq = 0;
-        function financeFormHTML() {
+        const formImages = {};          // รูปสินค้าที่เลือกในฟอร์ม (ตาม id ฟอร์ม)
+        let pendingImage = null, pendingItem = '';
+        const normName = x => String(x || '').trim().toLowerCase();
+        function financeFormHTML(pre = {}) {
             const f = finance || {}, ex = f.expenses || [];
             const get = cat => ex.find(e => e.cat === cat);
-            const food = get('food'), travel = get('transport'), game = get('game');
-            const otherDaily = ex.filter(e => !['food', 'transport', 'game'].includes(e.cat)).reduce((a, e) => a + e.amount / PERIOD_DAYS[e.period], 0);
+            const food = get('food'), travel = get('transport');
+            const others = ex.filter(e => !['food', 'transport', 'game'].includes(e.cat));
+            const other = others.length === 1 ? others[0] : (others.length ? { amount: others.reduce((a, e) => a + e.amount / PERIOD_DAYS[e.period], 0), period: 'day' } : null);
             const inc = f.income;
             const v = x => x != null && x !== '' ? String(Math.round(x * 100) / 100) : '';
+            const PERS = [['day', 'ต่อวัน'], ['week', 'ต่อสัปดาห์'], ['month', 'ต่อเดือน']];
             const sel = (name, opts, cur) => `<select name="${name}" class="rounded-xl bg-white border border-[#e6d8c6] px-2 py-2 text-base">${opts.map(([val, lab]) => `<option value="${val}" ${val === cur ? 'selected' : ''}>${lab}</option>`).join('')}</select>`;
             const num = (name, val, ph) => `<input name="${name}" type="number" inputmode="decimal" min="0" step="any" value="${v(val)}" placeholder="${ph}" class="flex-1 min-w-0 rounded-xl bg-white border border-[#e6d8c6] px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-[#9c8a7e]">`;
             const row = (label, inner, hint) => `<label class="block"><span class="block text-sm font-semibold text-gray-700 mb-1">${label}${hint ? ` <span class="font-normal text-gray-500 text-xs">${hint}</span>` : ''}</span><div class="flex gap-2 items-center">${inner}</div></label>`;
             const id = 'ff' + (++formSeq);
+            if (pre.image) formImages[id] = pre.image;
             return `<form data-finform id="${id}" class="space-y-3" novalidate>
-                <p class="font-semibold text-[#9c8a7e]">กรอกข้อมูลคร่าว ๆ ให้หน่อยนะ เดี๋ยวช่วยคิดว่าเก็บวันละเท่าไหร่ถึงไหว</p>
+                <p class="font-semibold text-[#9c8a7e]">${pre.title || 'กรอกข้อมูลคร่าว ๆ ให้หน่อยนะ เดี๋ยวช่วยคิดว่าเก็บวันละเท่าไหร่ถึงไหว'}</p>
                 ${row('รายได้', num('inc', inc && inc.amount, 'เช่น 10000') + sel('incPer', [['month', 'ต่อเดือน'], ['week', 'ต่อสัปดาห์'], ['day', 'ต่อวัน']], (inc && inc.period) || 'month'))}
-                ${row('ค่ากิน', num('food', food && food.amount / PERIOD_DAYS[food.period], 'เช่น 40') + '<span class="text-sm text-gray-600 shrink-0">บาท/วัน</span>')}
-                ${row('ค่าเดินทาง', num('travel', travel && travel.amount / PERIOD_DAYS[travel.period], 'ไม่มีเว้นว่าง') + '<span class="text-sm text-gray-600 shrink-0">บาท/วัน</span>')}
-                ${row('ค่าเติมเกม / ซื้อของในเกม', num('game', game && game.amount, 'ไม่มีเว้นว่าง') + sel('gamePer', [['month', 'ต่อเดือน'], ['week', 'ต่อสัปดาห์'], ['day', 'ต่อวัน']], (game && game.period) || 'month'))}
-                ${row('ค่าใช้จ่ายอื่น ๆ', num('other', otherDaily || '', 'ไม่มีเว้นว่าง') + '<span class="text-sm text-gray-600 shrink-0">บาท/วัน</span>')}
+                ${row('ค่ากิน', num('food', food && food.amount, 'เช่น 40') + sel('foodPer', PERS, (food && food.period) || 'day'))}
+                ${row('ค่าเดินทาง', num('travel', travel && travel.amount, 'ไม่มีเว้นว่าง') + sel('travelPer', PERS, (travel && travel.period) || 'day'))}
+                ${row('ค่าใช้จ่ายอื่น ๆ', num('other', other && other.amount, 'ไม่มีเว้นว่าง') + sel('otherPer', PERS, (other && other.period) || 'day'))}
                 <div class="border-t-2 border-dashed border-[#e6d8c6] pt-3 space-y-3">
                     <p class="text-sm font-bold text-gray-700">อยากออมเงิน <span class="font-normal text-gray-500 text-xs">(ถ้ายังไม่รู้ เว้นว่างได้)</span></p>
-                    ${row('อยากได้อะไร', `<input name="item" type="text" maxlength="40" placeholder="เช่น ตั๋วหนัง" class="flex-1 min-w-0 rounded-xl bg-white border border-[#e6d8c6] px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-[#9c8a7e]">`)}
-                    ${row('ต้องการออม', num('target', '', 'เช่น 250') + '<span class="text-sm text-gray-600 shrink-0">บาท</span>')}
+                    <div>
+                        <span class="block text-sm font-semibold text-gray-700 mb-1">อยากได้อะไร</span>
+                        <div class="flex gap-2 items-center">
+                            <button type="button" data-pickimg="${id}" class="w-12 h-12 shrink-0 rounded-xl bg-white border-2 border-dashed border-[#d9cfc7] text-gray-400 flex flex-col items-center justify-center overflow-hidden" aria-label="เพิ่มรูปสินค้า">${pre.image ? `<img src="${pre.image}" alt="" class="w-full h-full object-cover">` : '<i class="fa-solid fa-camera"></i><span class="text-[10px] leading-none mt-0.5">รูป</span>'}</button>
+                            <input name="item" type="text" maxlength="40" value="${esc(pre.item || '')}" placeholder="เช่น ตั๋วหนัง" class="flex-1 min-w-0 rounded-xl bg-white border border-[#e6d8c6] px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-[#9c8a7e]">
+                        </div>
+                        <span class="block text-xs text-gray-500 mt-1">แตะกล่องรูปกล้องเพื่อใส่รูปสินค้าจากเครื่องหรือมือถือ</span>
+                    </div>
+                    ${row('ต้องการออม', num('target', pre.target, 'เช่น 250') + '<span class="text-sm text-gray-600 shrink-0">บาท</span>')}
                     ${row('ภายใน', num('durN', '', 'เช่น 7') + sel('durU', [['day', 'วัน'], ['week', 'สัปดาห์'], ['month', 'เดือน']], 'day'))}
                 </div>
                 <p data-err class="hidden text-sm text-red-500"></p>
@@ -921,7 +946,29 @@
                 </div>
             </form>`;
         }
-        function showFinanceForm() { addBot(financeFormHTML(), { wide: true }); }
+        function showFinanceForm(pre) { addBot(financeFormHTML(pre), { wide: true }); }
+
+        // ---- เลือกรูปสินค้า (จากฟอร์ม หรือจากการ์ดตาราง) ----
+        const $img = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*', className: 'hidden' });
+        document.body.appendChild($img);
+        let imgTarget = null;
+        $chat.addEventListener('click', e => {
+            const pb = e.target.closest('[data-pickimg]');
+            if (pb) { imgTarget = { kind: 'form', id: pb.dataset.pickimg }; $img.click(); }
+        });
+        $img.addEventListener('change', async () => {
+            const file = $img.files[0]; $img.value = '';
+            if (!file || !imgTarget) return;
+            const t = imgTarget; imgTarget = null;
+            try {
+                const data = await AOMSUK.resizeImage(file, 480);
+                if (t.kind === 'form') {
+                    formImages[t.id] = data;
+                    const btn = $chat.querySelector(`[data-pickimg="${t.id}"]`);
+                    if (btn) btn.innerHTML = `<img src="${data}" alt="" class="w-full h-full object-cover">`;
+                } else if (plans[t.id]) { plans[t.id].image = data; renderCard(plans[t.id]); }
+            } catch (err) { addBot(esc(err.message)); }
+        });
 
         $chat.addEventListener('click', e => {
             const c = e.target.closest('[data-clearfin]'); if (!c) return;
@@ -945,10 +992,9 @@
 
             // สร้างข้อมูลการเงินใหม่ทั้งชุด (แทนของเดิม)
             const expenses = [];
-            if (n('food')) expenses.push({ cat: 'food', label: 'ค่ากิน', amount: n('food'), period: 'day' });
-            if (n('travel')) expenses.push({ cat: 'transport', label: 'ค่าเดินทาง', amount: n('travel'), period: 'day' });
-            if (n('game')) expenses.push({ cat: 'game', label: 'ค่าเติมเกม', amount: n('game'), period: g('gamePer') || 'month' });
-            if (n('other')) expenses.push({ cat: 'other', label: 'ค่าใช้จ่ายอื่น', amount: n('other'), period: 'day' });
+            if (n('food')) expenses.push({ cat: 'food', label: 'ค่ากิน', amount: n('food'), period: g('foodPer') || 'day' });
+            if (n('travel')) expenses.push({ cat: 'transport', label: 'ค่าเดินทาง', amount: n('travel'), period: g('travelPer') || 'day' });
+            if (n('other')) expenses.push({ cat: 'other', label: 'ค่าใช้จ่ายอื่น', amount: n('other'), period: g('otherPer') || 'day' });
             const per = g('incPer') || 'month';
             finance = (n('inc') || expenses.length) ? { income: n('inc') ? { amount: n('inc'), period: per, word: per === 'month' ? 'เงินเดือน' : 'รายได้' } : null, expenses } : null;
             AOMSUK.saveFinance(finance).catch(() => { });
@@ -959,6 +1005,7 @@
             if (n('inc')) parts.push(`รายได้ ${baht(n('inc'))} บาท/${PERIOD_WORD[per]}`);
             expenses.forEach(x => parts.push(`${x.label} ${baht(x.amount)}/${PERIOD_WORD[x.period]}`));
             const item = g('item'), unitWord = { day: 'วัน', week: 'สัปดาห์', month: 'เดือน' }[g('durU')] || 'วัน';
+            pendingImage = formImages[form.id] || null; pendingItem = item;
             if (target) parts.push(`อยากออม ${baht(target)} บาท ใน ${durN} ${unitWord}${item ? ` (${item})` : ''}`);
             addUser(parts.join(' · '));
 
@@ -977,8 +1024,17 @@
         // ข้อความต้อนรับ (หลังโหลดข้อมูลผู้ใช้เสร็จ)
         AOMSUK.onReady(() => {
         finance = AOMSUK.finance();
-        addBot(`สวัสดี คุณ ${esc(AOMSUK.displayName())} ช่วงนี้อยากเก็บเงินไว้ซื้ออะไรเหรอ?<br><span class="text-[13px] text-gray-600">${finance ? 'ข้อมูลที่เคยบอกไว้อยู่ในฟอร์มด้านล่าง ถ้าอะไรเปลี่ยนก็แก้ได้เลย' : 'กรอกฟอร์มด้านล่าง หรือจะพิมพ์เล่ามาเองก็ได้นะ'}</span>`);
-        showFinanceForm();
+        // มาจากหน้าเพิ่มเป้าหมาย (chat.html?goal=...) -> เติมชื่อ ราคา รูป ให้ในฟอร์ม
+        const goalId = new URLSearchParams(location.search).get('goal');
+        const gw = goalId && AOMSUK.wishlist.find(w => w.id === goalId);
+        if (goalId) history.replaceState(null, '', location.pathname);
+        if (gw) {
+            addBot(`สวัสดี คุณ ${esc(AOMSUK.displayName())} บันทึก "${esc(gw.name)}" ไว้ให้แล้ว<br><span class="text-[13px] text-gray-600">กรอกรายได้ ค่าใช้จ่าย และอยากได้ภายในกี่วัน แล้วกด "คำนวณให้หน่อย" ได้เลย</span>`);
+            showFinanceForm({ item: gw.name, target: gw.price, image: gw.image, title: `วางแผนออมเพื่อ "${esc(gw.name)}"` });
+        } else {
+            addBot(`สวัสดี คุณ ${esc(AOMSUK.displayName())} ช่วงนี้อยากเก็บเงินไว้ซื้ออะไรเหรอ?<br><span class="text-[13px] text-gray-600">${finance ? 'ข้อมูลที่เคยบอกไว้อยู่ในฟอร์มด้านล่าง ถ้าอะไรเปลี่ยนก็แก้ได้เลย' : 'กรอกฟอร์มด้านล่าง หรือจะพิมพ์เล่ามาเองก็ได้นะ'}</span>`);
+            showFinanceForm();
+        }
         setChips(EXAMPLES);
 
         // เปิดจากหน้าอื่นพร้อมคำสั่ง เช่น chat.html?q=ออม 390 บาท ใน 1 เดือน

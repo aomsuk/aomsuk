@@ -530,7 +530,7 @@
                 cur.replaceWith(el);
             }
             const span = acc.querySelector('span');
-            if (span) span.innerHTML = `${esc(A.displayName())}<span class="block text-[11px] font-normal text-gray-500 truncate max-w-[150px]">${esc(A.user.email)}</span>`;
+            if (span) span.innerHTML = `<span class="block text-lg leading-tight truncate max-w-[160px]">${esc(A.displayName())}</span><span class="block text-xs font-normal text-gray-500 truncate max-w-[160px]">${esc(A.user.email)}</span>`;
         }
         const set = links.find(a => a.textContent.trim() === 'ตั้งค่า'); if (set) set.href = 'settings.html';
         const nav = sb.querySelector('nav');
