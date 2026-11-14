@@ -330,7 +330,10 @@
                 <div class="flex items-center gap-3 min-w-0">${w.image
                     ? `<img src="${w.image}" alt="" class="w-12 h-12 rounded-xl object-cover shrink-0">`
                     : `<span class="text-2xl w-12 text-center shrink-0">${esc(w.emoji || '🎯')}</span>`}<span class="font-bold text-gray-700 text-sm truncate">${esc(w.name)}</span></div>
-                ${withStatus ? `<div class="text-right"><div class="font-bold text-gray-700">${(+w.price).toLocaleString('th-TH')} THB</div>${status}</div>` : `<span class="font-bold text-gray-700">${(+w.price).toLocaleString('th-TH')} THB</span>`}
+                <div class="flex items-center gap-2 shrink-0">
+                    ${withStatus ? `<div class="text-right"><div class="font-bold text-gray-700">${(+w.price).toLocaleString('th-TH')} THB</div>${status}</div>` : `<span class="font-bold text-gray-700">${(+w.price).toLocaleString('th-TH')} THB</span>`}
+                    <button data-editwish="${esc(w.id)}" class="w-9 h-9 rounded-full bg-[#f4efe9] text-[#7a6a5f] hover:bg-[#9c8a7e] hover:text-white flex items-center justify-center" aria-label="แก้ไขเป้าหมาย"><i class="fa-solid fa-pen"></i></button>
+                </div>
             </div>`;
         }
         function renderWishlist() {
@@ -357,6 +360,8 @@
             }
             const pill = e.target.closest('[data-goal]');
             if (pill) { setActive(pill.dataset.goal); renderAll(); return; }
+            const ew = e.target.closest('[data-editwish]');
+            if (ew) { A.go(`add-goal.html?edit=${encodeURIComponent(ew.dataset.editwish)}`); return; }
             const dw = e.target.closest('[data-delwish]');
             if (dw) {
                 const w = A.wishlist.find(x => x.id === dw.dataset.delwish);

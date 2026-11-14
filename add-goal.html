@@ -88,22 +88,24 @@
                     <input id="fileInput" type="file" accept="image/*" class="hidden">
                 </div>
                 <div class="flex-1 space-y-2 min-w-0">
-                    <h3 class="font-bold text-gray-700 text-base">ตั้งค่าเป้าหมายของคุณ</h3>
+                    <h3 id="formTitle" class="font-bold text-gray-700 text-base">ตั้งค่าเป้าหมายของคุณ</h3>
                     <input id="nameInput" type="text" maxlength="40" placeholder="เป้าหมาย เช่น หูฟัง" class="w-full px-3 py-2 bg-white rounded-full text-center text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-[#9c8a7e]">
                     <input id="priceInput" type="number" inputmode="decimal" min="1" placeholder="ราคา (บาท)" class="w-full px-3 py-2 bg-white rounded-full text-center text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-[#9c8a7e]">
                 </div>
             </div>
+            <p id="editNote" class="hidden text-sm text-gray-600 mt-3 text-center bg-white/70 rounded-2xl px-3 py-2"><i class="fa-solid fa-circle-info mr-1 text-[#9c8a7e]"></i>แก้ชื่อหรือรูปได้เลย ถ้าเปลี่ยน<b>ราคา</b> จะพาไปให้แชทบอทคำนวณตารางใหม่ให้ดูก่อนยืนยัน</p>
             <p id="formError" class="hidden text-sm text-red-500 mt-2 text-center"></p>
             <button type="submit" class="mt-3 w-full bg-[#9c8a7e] hover:bg-[#8a7a6f] text-white font-bold text-base rounded-full py-2.5 shadow-sm transition-colors disabled:opacity-60">
-                <i class="fa-solid fa-floppy-disk mr-1"></i> บันทึกเป้าหมาย
+                <i class="fa-solid fa-floppy-disk mr-1"></i> <span id="saveLabel">บันทึกเป้าหมาย</span>
             </button>
+            <a id="cancelEdit" href="dashboard.html" class="hidden block text-center text-base text-gray-500 mt-2 underline">ยกเลิกการแก้ไข</a>
         </form>
 
         <!-- การ์ดหลังบันทึกสำเร็จ -->
         <div id="successCard" class="hidden"></div>
 
         <!-- ไอเดียเป้าหมาย (ส่วนเดียว) -->
-        <div>
+        <div id="ideasSection">
             <h3 class="font-bold text-gray-800 text-base">ยังคิดไม่ออก? ลองเลือกจากไอเดียนี้ 💡</h3>
             <p class="text-sm text-gray-500 mb-2">แตะเพื่อเติมชื่อลงฟอร์มด้านบน แล้วใส่ราคาเอง</p>
             <div id="ideas" class="grid grid-cols-2 gap-2"></div>
@@ -215,7 +217,8 @@
             if (!name) return showError('กรุณาใส่ชื่อเป้าหมาย', $name);
             if (!(price > 0)) return showError('กรุณาใส่ราคาที่มากกว่า 0 บาท', $price);
             if (price > 10000000) return showError('ราคาสูงเกินไป (ไม่เกิน 10,000,000 บาท)', $price);
-            if (A.wishlist.some(w => w.name.toLowerCase() === name.toLowerCase())) return showError('มีเป้าหมายชื่อนี้อยู่แล้ว', $name);
+            if (A.wishlist.some(w => w.name.toLowerCase() === name.toLowerCase() && (!editing || w.id !== editing.id))) return showError('มีเป้าหมายชื่อนี้อยู่แล้ว', $name);
+            if (editing) return saveEdit(name, Math.round(price * 100) / 100);
 
             const item = { id: A.newId(), emoji: chosenEmoji || guessEmoji(name), name, price: Math.round(price * 100) / 100, createdAt: new Date().toISOString() };
             if (chosenImage) item.image = chosenImage;
@@ -229,6 +232,40 @@
             toast('บันทึกแล้ว ไปวางแผนออมกับแชทบอทกัน');
             setTimeout(() => A.go(`chat.html?goal=${encodeURIComponent(item.id)}`), 900);
         });
+
+        // ---------------- แก้ไขเป้าหมาย (add-goal.html?edit=รหัส) ----------------
+        let editing = null;
+        const norm = x => String(x || '').trim().toLowerCase();
+        function startEdit(w) {
+            editing = w;
+            $name.value = w.name; $price.value = w.price;
+            chosenImage = w.image || null; chosenEmoji = w.emoji || guessEmoji(w.name); emojiManual = true; renderImageBox();
+            $('formTitle').textContent = 'แก้ไขเป้าหมาย';
+            $('saveLabel').textContent = 'บันทึกการแก้ไข';
+            $('editNote').classList.remove('hidden'); $('cancelEdit').classList.remove('hidden');
+            $('ideasSection').classList.add('hidden');
+            window.scrollTo({ top: 0 });
+        }
+        async function saveEdit(name, price) {
+            const w = editing;
+            const updated = { ...w, name, emoji: chosenEmoji || guessEmoji(name) };
+            if (chosenImage) updated.image = chosenImage; else delete updated.image;
+            const priceChanged = Math.abs(price - (+w.price)) > 0.001;
+            const label = $saveBtn.innerHTML;
+            $saveBtn.disabled = true; $saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> กำลังบันทึก...';
+            try {
+                await A.saveWish(updated);   // ราคายังเป็นราคาเดิม รอยืนยันในแชทบอทก่อน
+                const g = A.goals.find(x => x.wishId === w.id || norm(x.title) === norm(w.name));
+                if (g && (g.title !== name || g.wishId !== w.id)) await A.saveGoal({ ...g, title: name, wishId: w.id });
+            } catch (err) { $saveBtn.disabled = false; $saveBtn.innerHTML = label; return showError('บันทึกไม่สำเร็จ: ' + err.message, $name); }
+            if (priceChanged) {
+                toast('ไปให้แชทบอทคำนวณราคาใหม่ก่อนนะ');
+                setTimeout(() => A.go(`chat.html?edit=${encodeURIComponent(w.id)}&price=${price}`), 800);
+            } else {
+                toast('บันทึกการแก้ไขแล้ว');
+                setTimeout(() => A.go('dashboard.html'), 800);
+            }
+        }
 
         const thumb = (w, cls) => w.image
             ? `<img src="${w.image}" alt="" class="${cls} object-cover">`
@@ -279,6 +316,7 @@
                     <div class="flex items-center gap-2 shrink-0">
                         <div class="text-right"><div class="font-bold text-gray-700 text-base">${thb(w.price)} THB</div>
                         <div class="text-xs ${need > 0 ? 'text-[#cc9c94]' : 'text-gray-500'}">${need > 0 ? `คุณยังขาดอีก ${thb(need)} บาท` : 'คุณสามารถซื้อสินค้านี้ได้!'}</div></div>
+                        <button data-edit="${esc(w.id)}" class="text-gray-900 hover:text-[#9c8a7e] px-1" aria-label="แก้ไข"><i class="fa-solid fa-pen-to-square text-lg"></i></button>
                         <button data-delete="${esc(w.id)}" class="text-gray-900 hover:text-red-500 px-1" aria-label="ลบ"><i class="fa-solid fa-trash-can text-lg"></i></button>
                     </div>
                 </div>`;
@@ -289,6 +327,8 @@
         $('savedList').addEventListener('click', e => {
             const c = e.target.closest('[data-change-img]');
             if (c) { changingId = c.dataset.changeImg; $('changeFileInput').click(); return; }
+            const ed = e.target.closest('[data-edit]');
+            if (ed) { const w = A.wishlist.find(x => x.id === ed.dataset.edit); if (w) startEdit(w); return; }
             const d = e.target.closest('[data-delete]');
             if (d) {
                 const w = A.wishlist.find(x => x.id === d.dataset.delete);
@@ -306,6 +346,12 @@
 
         renderImageBox();
         A.onReady(renderSaved);
+        A.onReady(() => {
+            const id = new URLSearchParams(location.search).get('edit');
+            if (!id) return;
+            const w = A.wishlist.find(x => x.id === id);
+            if (w) startEdit(w); else toast('ไม่พบเป้าหมายนี้');
+        });
         A.onChange(renderSaved);
     </script>
 </body>

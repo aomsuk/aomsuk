@@ -122,9 +122,9 @@
                 $('card').innerHTML = `<div class="text-center py-6">
                     <div class="text-5xl mb-3">🎉</div>
                     <p class="font-bold text-[#9c8a7e] text-lg">สมัครสมาชิกสำเร็จ!</p>
-                    <p class="text-sm text-gray-500 mt-1">ยินดีต้อนรับ ${name.replace(/[&<>"']/g, '')} กำลังพาไปตั้งเป้าหมายแรก...</p>
+                    <p class="text-sm text-gray-500 mt-1">ยินดีต้อนรับ ${name.replace(/[&<>"']/g, '')} กำลังพาไปหน้าติดตาม...</p>
                 </div>`;
-                return setTimeout(() => AOMSUK.goReplace('add-goal.html'), 1300);
+                return setTimeout(() => AOMSUK.goReplace('dashboard.html'), 1300);
             }
             $btn.disabled = false; $btn.textContent = 'สมัครสมาชิก';
             fail(res.error, res.field === 'email' ? $email : null);

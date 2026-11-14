@@ -639,7 +639,10 @@
                     <div class="flex justify-between border-t-2 border-dashed border-gray-300 pt-1 font-semibold text-[#7a6a5f]"><span>รวม</span><span>${fmtMoney(p.total)} ฿</span></div>
                 </div>
                 <div class="flex gap-2">
-                    ${p.saved
+                    ${p.editMode ? (p.editDone ? `<a href="dashboard.html" class="flex-1 text-center bg-green-600 text-white rounded-full py-2 text-xs font-semibold"><i class="fa-solid fa-check mr-1"></i>${esc(p.editDone)}</a>` : `
+                        <button data-act="editApply" data-id="${p.id}" class="flex-1 bg-[#9c8a7e] hover:bg-[#8a7a6f] text-white rounded-full py-2 text-xs font-semibold"><i class="fa-solid fa-check mr-1"></i>เปลี่ยนเป็นราคาใหม่</button>
+                        <button data-act="editKeep" data-id="${p.id}" class="flex-1 bg-white border border-[#9c8a7e] text-[#9c8a7e] rounded-full py-2 text-xs font-semibold">ใช้ราคาเดิม</button>`) :
+                    p.saved
                         ? `<a href="dashboard.html" class="flex-1 text-center bg-green-600 text-white rounded-full py-2 text-xs font-semibold"><i class="fa-solid fa-check mr-1"></i>บันทึกแล้ว · ไปหน้าติดตาม</a>`
                         : `<button data-act="save" data-id="${p.id}" class="flex-1 bg-[#9c8a7e] hover:bg-[#8a7a6f] text-white rounded-full py-2 text-xs font-semibold"><i class="fa-solid fa-floppy-disk mr-1"></i>เอาตารางนี้</button>
                            <button data-act="img" data-id="${p.id}" class="bg-white border border-[#9c8a7e] text-[#9c8a7e] rounded-full px-3 py-2 text-xs font-semibold"><i class="fa-solid fa-camera mr-1"></i>${p.image ? 'เปลี่ยนรูป' : 'ใส่รูปสินค้า'}</button>`}
@@ -880,6 +883,7 @@
             if (act === 'prev') p.viewMonth = new Date(p.viewMonth.getFullYear(), p.viewMonth.getMonth() - 1, 1);
             if (act === 'next') p.viewMonth = new Date(p.viewMonth.getFullYear(), p.viewMonth.getMonth() + 1, 1);
             if (act === 'toggle') p.expanded = !p.expanded;
+            if (act === 'editApply' || act === 'editKeep') { finishPriceEdit(p, act === 'editApply'); return; }
             if (act === 'img') { imgTarget = { kind: 'plan', id: p.id }; $img.click(); return; }
             if (act === 'save') {
                 if (p.saving || p.saved) return;
@@ -1021,11 +1025,96 @@
             }
         });
 
+        // ---------------- เปลี่ยนราคาเป้าหมาย (มาจากหน้าแก้ไข: chat.html?edit=...&price=...) ----------------
+        // คำนวณตารางใหม่ให้ดูก่อน แล้วให้ผู้ใช้เลือกว่าจะเปลี่ยนหรือใช้ราคาเดิม
+        function startPriceEdit(w, P1) {
+            const P0 = +w.price;
+            const g = AOMSUK.goals.find(x => x.wishId === w.id || normName(x.title) === normName(w.name));
+            const head = `ขอเช็กให้ก่อนนะ "${esc(w.name)}" จะเปลี่ยนราคาจาก ${baht(P0)} เป็น <b>${baht(P1)} บาท</b>`;
+            const p = { id: 'e' + Date.now().toString(36), editMode: true, wish: w, newPrice: P1, goal: g || null, req: { label: w.name }, image: w.image };
+            if (!g) {
+                // ยังไม่มีตาราง: แค่ยืนยันราคา
+                addBot(`${head}<br>เป้าหมายนี้ยังไม่มีตารางออม เลยเปลี่ยนราคาได้เลย`);
+                p.simple = true; plans[p.id] = p;
+                addBot(`<div id="card-${p.id}">${editButtonsHTML(p)}</div>`, { wide: true });
+                return;
+            }
+            const saved = AOMSUK.savedOf(g), remaining = round2(P1 - saved);
+            const today = dOnly(new Date()), tkey = dkey(today);
+            if (remaining <= 0) {
+                addBot(`${head}<br>ออมไปแล้ว ${baht(saved)} บาท ซึ่งครบราคาใหม่แล้ว ถ้าเปลี่ยน แผนนี้จะถือว่าถึงเป้าหมายเลย 🎉`);
+                p.simple = true; p.reached = true; plans[p.id] = p;
+                addBot(`<div id="card-${p.id}">${editButtonsHTML(p)}</div>`, { wide: true });
+                return;
+            }
+            const savedToday = g.schedule.some(i => i.date === tkey && i.saved);
+            const start = savedToday ? addDays(today, 1) : today;
+            let end = (() => { const [y, m, d] = g.endDate.split('-').map(Number); return new Date(y, m - 1, d); })();
+            if (end < start) end = addDays(start, 6);
+            const days = Math.round((end - start) / 864e5) + 1;
+            const cond = g.conditions || {};
+            const req = { amount: remaining, duration: { n: days, unit: 'day' }, frequency: g.frequency, label: w.name };
+            if (savedToday) req.start = { type: 'tomorrow' };
+            if (cond.excludedDays && cond.excludedDays.length) req.excluded = cond.excludedDays;
+            if (cond.onlyDays && cond.onlyDays.length) req.only = cond.onlyDays;
+            let plan = buildPlan(req, 1);
+            if (plan.error) { delete req.excluded; delete req.only; plan = buildPlan(req, 1); }
+            if (plan.error) { addBot(esc(plan.error)); return; }
+            Object.assign(plan, p, { req, headline: `ตารางใหม่ · ${w.name}` });
+            plans[plan.id] = plan;
+            let msg = `${head}<br>ออมไปแล้ว ${baht(saved)} บาท เหลืออีก ${baht(remaining)} บาท ถึงวันที่ ${fmtDate(plan.end, { day: 'numeric', month: 'short' })} ต้องเก็บ${describeAmounts(plan)}`;
+            const as = assessPlan(plan, finance);
+            if (as) msg += as.ok ? `<br><span class="text-[13px] text-gray-600">เทียบกับรายรับ-รายจ่ายแล้ว ยังไหวอยู่ (เหลือใช้วันละราว ${baht(Math.round(as.free - as.need))} บาท)</span>`
+                : `<br><span class="text-[13px] text-red-500">เทียบกับรายรับ-รายจ่ายแล้ว ตึงไปหน่อย ต้องเก็บวันละ ~${baht(Math.ceil(as.need))} แต่เหลือแค่วันละ ~${baht(Math.max(0, Math.round(as.free)))}</span>`;
+            addBot(msg + '<br>จะเปลี่ยนเป็นราคาใหม่ หรือใช้ราคาเดิมดี?');
+            addBot(cardHTML(plan), { wide: true, id: `card-${plan.id}` });
+            setChips(['เริ่มใหม่']);
+        }
+        function editButtonsHTML(p) {
+            if (p.editDone) return `<a href="dashboard.html" class="block text-center bg-green-600 text-white rounded-full py-2 text-sm font-semibold"><i class="fa-solid fa-check mr-1"></i>${esc(p.editDone)}</a>`;
+            return `<div class="flex gap-2">
+                <button data-act="editApply" data-id="${p.id}" class="flex-1 bg-[#9c8a7e] text-white rounded-full py-2 text-sm font-semibold"><i class="fa-solid fa-check mr-1"></i>เปลี่ยนเป็น ${baht(p.newPrice)} บาท</button>
+                <button data-act="editKeep" data-id="${p.id}" class="flex-1 bg-white border border-[#9c8a7e] text-[#9c8a7e] rounded-full py-2 text-sm font-semibold">ใช้ราคาเดิม ${baht(p.wish.price)}</button>
+            </div>`;
+        }
+        async function finishPriceEdit(p, apply) {
+            if (p.editBusy || p.editDone) return;
+            const rerender = () => { const el = document.getElementById(`card-${p.id}`); if (el) el.innerHTML = p.simple ? editButtonsHTML(p) : cardHTML(p); };
+            if (!apply) {
+                p.editDone = `ใช้ราคาเดิม ${baht(p.wish.price)} บาท · ไปหน้าติดตาม`; rerender();
+                botReply(() => addBot(`โอเค ใช้ราคาเดิม ${baht(p.wish.price)} บาทเหมือนเดิมนะ ตารางออมไม่เปลี่ยน`));
+                return;
+            }
+            p.editBusy = true;
+            try {
+                const w = AOMSUK.wishlist.find(x => x.id === p.wish.id) || p.wish;
+                await AOMSUK.saveWish({ ...w, price: p.newPrice });
+                const g = p.goal && (AOMSUK.goals.find(x => x.id === p.goal.id) || p.goal);
+                if (g) {
+                    const kept = g.schedule.filter(i => i.saved);
+                    const fresh = p.items ? p.items.map(it => ({ date: dkey(it.date), amount: it.amount, saved: false })) : [];
+                    const schedule = [...kept, ...fresh].sort((a, b) => a.date.localeCompare(b.date));
+                    await AOMSUK.saveGoal({ ...g, wishId: w.id, target: p.newPrice, schedule, startDate: schedule.length ? schedule[0].date : g.startDate, endDate: p.end ? dkey(p.end) : g.endDate });
+                }
+                p.editBusy = false; p.editDone = `เปลี่ยนเป็น ${baht(p.newPrice)} บาทแล้ว · ไปหน้าติดตาม`; rerender();
+                botReply(() => addBot(`เปลี่ยนราคา "${esc(w.name)}" เป็น ${baht(p.newPrice)} บาทเรียบร้อย${g ? ' ตารางออมก็อัปเดตให้แล้ว' : ''} ไปดูได้ที่หน้า <a href="dashboard.html" class="font-semibold text-[#9c8a7e] underline">ติดตาม</a>`));
+            } catch (err) { p.editBusy = false; addBot(`บันทึกไม่ได้ ${esc(err.message)} ลองกดอีกทีนะ`); }
+        }
+
         // ข้อความต้อนรับ (หลังโหลดข้อมูลผู้ใช้เสร็จ)
         AOMSUK.onReady(() => {
         finance = AOMSUK.finance();
         // มาจากหน้าเพิ่มเป้าหมาย (chat.html?goal=...) -> เติมชื่อ ราคา รูป ให้ในฟอร์ม
-        const goalId = new URLSearchParams(location.search).get('goal');
+        const qs = new URLSearchParams(location.search);
+        const editId = qs.get('edit'), editPrice = parseFloat(qs.get('price'));
+        const ew = editId && AOMSUK.wishlist.find(w => w.id === editId);
+        if (ew && editPrice > 0) {
+            history.replaceState(null, '', location.pathname);
+            addBot(`สวัสดี คุณ ${esc(AOMSUK.displayName())}`);
+            startPriceEdit(ew, editPrice);
+            return;
+        }
+        const goalId = qs.get('goal');
         const gw = goalId && AOMSUK.wishlist.find(w => w.id === goalId);
         if (goalId) history.replaceState(null, '', location.pathname);
         if (gw) {
