@@ -138,7 +138,7 @@
                 if (!cur) return;   // เปิดครั้งแรก แค่จำเวอร์ชันไว้
                 const go = () => {
                     const bar = document.createElement('div');
-                    bar.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(31,41,55,.92);color:#fff;padding:10px 18px;border-radius:9999px;font:600 14px \'Google Sans\',\'Noto Sans Thai Looped\',sans-serif;z-index:10001';
+                    bar.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(31,41,55,.92);color:#fff;padding:10px 18px;border-radius:9999px;font:600 14px \'Sarabun\',sans-serif;z-index:10001';
                     bar.textContent = 'มีเวอร์ชันใหม่ กำลังอัปเดต...';
                     document.body.appendChild(bar);
                     const file = location.pathname.split('/').pop() || 'index.html';
@@ -252,7 +252,7 @@
             if (!document.documentElement.classList.contains('aomsuk-loading')) return;
             const l = document.createElement('div');
             l.id = 'aomsukLoader';
-            l.style.cssText = 'position:fixed;inset:0;background:var(--t-bg,#d8eafe);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;font-family:\'Google Sans\',\'Noto Sans Thai Looped\',sans-serif;color:var(--t-primary,#9c8a7e)';
+            l.style.cssText = 'position:fixed;inset:0;background:var(--t-bg,#d8eafe);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;font-family:\'Sarabun\',sans-serif;color:var(--t-primary,#9c8a7e)';
             l.innerHTML = '<i class="fa-solid fa-piggy-bank fa-bounce" style="font-size:48px"></i><p style="margin-top:12px;font-weight:600">กำลังโหลดข้อมูล...</p>';
             document.body.appendChild(l);
         });
@@ -268,7 +268,7 @@
             if (document.getElementById('aomsukFatal')) return;
             const d = document.createElement('div');
             d.id = 'aomsukFatal';
-            d.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px;font-family:\'Google Sans\',\'Noto Sans Thai Looped\',sans-serif';
+            d.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px;font-family:\'Sarabun\',sans-serif';
             d.innerHTML = `<div style="background:#fff;border-radius:24px;padding:24px;max-width:380px;width:100%;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.2)">
                 <div style="font-size:40px">⚠️</div>
                 <p style="font-weight:700;color:#9c8a7e;font-size:18px;margin:8px 0">${esc(title)}</p>
