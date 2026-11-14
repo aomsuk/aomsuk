@@ -7,10 +7,13 @@
     <!-- โหลดไฟล์เวอร์ชันล่าสุดเสมอ (กันมือถือ/iPad ใช้ไฟล์เก่าที่จำไว้) -->
     <script>(function () { var v = ''; try { v = (localStorage.getItem('aomsuk_build') || '').slice(0, 7); } catch (e) { } var q = v ? '?v=' + v : ''; document.write('<script src="firebase-config.js' + q + '"><\/script><script src="app.js' + q + '"><\/script>'); })();</script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400..700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai+Looped:wght@400..700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { font-family: 'Prompt', sans-serif; }
+        html { font-size: 17px; } body, button, input, textarea, select { font-family: 'Google Sans', 'Noto Sans Thai Looped', sans-serif; }
         ::-webkit-scrollbar { display: none; }
         * { scrollbar-width: none; }
         .msg-in { animation: msgIn .25s ease-out; }
@@ -734,7 +737,7 @@
             }
 
             if (!hasInfo(p) && !finChanged && !force) {
-                if (/^(สวัสดี|หวัดดี|ดีจ้า|ดีครับ|ดีค่ะ|hello|hi|hey)/.test(t)) { addBot(pick(['หวัดดี~ วันนี้อยากเก็บเงินไว้ทำอะไรเหรอ?', 'ไง วันนี้มีอะไรอยากได้รึเปล่า เล่ามาได้เลย'])); return setChips(EXAMPLES); }
+                if (/^(สวัสดี|หวัดดี|ดีจ้า|ดีครับ|ดีค่ะ|hello|hi|hey)/.test(t)) { addBot(pick([`สวัสดี คุณ${esc(AOMSUK.displayName())} วันนี้อยากเก็บเงินไว้ทำอะไรเหรอ?`, `สวัสดี คุณ${esc(AOMSUK.displayName())} มีอะไรอยากได้รึเปล่า เล่ามาได้เลย`])); return setChips(EXAMPLES); }
                 if (/ขอบคุณ|ขอบใจ|thank|thx/.test(t)) { addBot(pick(['ยินดีเลย เก็บทีละนิดเดี๋ยวก็ถึง สู้ ๆ นะ', 'ไม่เป็นไรเลย มีอะไรให้ช่วยคิดอีกก็ทักมาได้นะ'])); return; }
                 addBot('อันนี้เรายังไม่ค่อยเข้าใจ ลองเล่าแบบนี้ดูไหม <b>"เงินเดือน 10,000 กินข้าววันละ 40 อยากได้ตั๋วหนังใน 1 อาทิตย์"</b> หรือพิมพ์ <b>"ช่วย"</b> ก็ได้');
                 return setChips(EXAMPLES);
@@ -863,7 +866,7 @@
         AOMSUK.onReady(() => {
         finance = AOMSUK.finance();
         const b0 = budgetOf(finance);
-        addBot(`หวัดดี ${esc(AOMSUK.displayName())} ช่วงนี้อยากเก็บเงินไว้ซื้ออะไรเหรอ?<br>${b0
+        addBot(`สวัสดี คุณ${esc(AOMSUK.displayName())} ช่วงนี้อยากเก็บเงินไว้ซื้ออะไรเหรอ?<br>${b0
             ? `<span class="text-[13px] text-gray-600">${b0.free >= 1 ? `จากที่เคยเล่าไว้ ตอนนี้น่าจะเหลือเก็บได้วันละราว ${baht(Math.round(b0.free))} บาท` : 'จากที่เคยเล่าไว้ ตอนนี้รายจ่ายเกือบเท่ารายได้เลย'} ถ้าอะไรเปลี่ยนก็บอกได้นะ</span>`
             : '<span class="text-[13px] text-gray-600">ถ้าเล่าเงินเดือนหรือค่าขนมกับค่าใช้จ่ายต่อวันมาด้วย จะช่วยคิดให้ว่าเก็บวันละเท่าไหร่ถึงไม่ลำบาก</span>'}`);
         setChips(EXAMPLES);

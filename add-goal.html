@@ -7,10 +7,13 @@
     <!-- โหลดไฟล์เวอร์ชันล่าสุดเสมอ (กันมือถือ/iPad ใช้ไฟล์เก่าที่จำไว้) -->
     <script>(function () { var v = ''; try { v = (localStorage.getItem('aomsuk_build') || '').slice(0, 7); } catch (e) { } var q = v ? '?v=' + v : ''; document.write('<script src="firebase-config.js' + q + '"><\/script><script src="app.js' + q + '"><\/script>'); })();</script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400..700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai+Looped:wght@400..700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { font-family: 'Prompt', sans-serif; }
+        html { font-size: 17px; } body, button, input, textarea, select { font-family: 'Google Sans', 'Noto Sans Thai Looped', sans-serif; }
         ::-webkit-scrollbar { display: none; }
         * { scrollbar-width: none; }
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }

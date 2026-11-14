@@ -113,7 +113,7 @@
                 if (!cur) return;   // เปิดครั้งแรก แค่จำเวอร์ชันไว้
                 const go = () => {
                     const bar = document.createElement('div');
-                    bar.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(31,41,55,.92);color:#fff;padding:10px 18px;border-radius:9999px;font:600 14px Prompt,sans-serif;z-index:10001';
+                    bar.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(31,41,55,.92);color:#fff;padding:10px 18px;border-radius:9999px;font:600 14px \'Google Sans\',\'Noto Sans Thai Looped\',sans-serif;z-index:10001';
                     bar.textContent = 'มีเวอร์ชันใหม่ กำลังอัปเดต...';
                     document.body.appendChild(bar);
                     const file = location.pathname.split('/').pop() || 'index.html';
@@ -227,7 +227,7 @@
             if (!document.documentElement.classList.contains('aomsuk-loading')) return;
             const l = document.createElement('div');
             l.id = 'aomsukLoader';
-            l.style.cssText = 'position:fixed;inset:0;background:var(--t-bg,#d8eafe);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;font-family:Prompt,sans-serif;color:var(--t-primary,#9c8a7e)';
+            l.style.cssText = 'position:fixed;inset:0;background:var(--t-bg,#d8eafe);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;font-family:\'Google Sans\',\'Noto Sans Thai Looped\',sans-serif;color:var(--t-primary,#9c8a7e)';
             l.innerHTML = '<i class="fa-solid fa-piggy-bank fa-bounce" style="font-size:48px"></i><p style="margin-top:12px;font-weight:600">กำลังโหลดข้อมูล...</p>';
             document.body.appendChild(l);
         });
@@ -243,7 +243,7 @@
             if (document.getElementById('aomsukFatal')) return;
             const d = document.createElement('div');
             d.id = 'aomsukFatal';
-            d.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px;font-family:Prompt,sans-serif';
+            d.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px;font-family:\'Google Sans\',\'Noto Sans Thai Looped\',sans-serif';
             d.innerHTML = `<div style="background:#fff;border-radius:24px;padding:24px;max-width:380px;width:100%;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.2)">
                 <div style="font-size:40px">⚠️</div>
                 <p style="font-weight:700;color:#9c8a7e;font-size:18px;margin:8px 0">${esc(title)}</p>
@@ -314,7 +314,10 @@
         }, onSnapErr));
         col('goals', arr => { A.goals = arr.sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''))); });
         col('wishlist', arr => { A.wishlist = arr; });
-        col('notifications', arr => { A.notifications = arr.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))); });
+        col('notifications', arr => {
+            allNotifs = arr;   // รวมอันที่ลบ (ซ่อน) แล้ว ไว้กันไม่ให้สร้างซ้ำ
+            A.notifications = arr.filter(n => !n.hidden).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+        });
     }
 
     function becomeReady() {
@@ -393,6 +396,7 @@
     A.saveGoal = w(g => fb.fsM.setDoc(sub('goals', g.id), clean({ ...g, updatedAt: nowISO() })));
     A.deleteGoal = w(id => fb.fsM.deleteDoc(sub('goals', id)));
     A.deleteAllGoals = w(() => Promise.all(A.goals.map(g => fb.fsM.deleteDoc(sub('goals', g.id)))));
+    A.deleteAllWishes = w(() => Promise.all(A.wishlist.map(x => fb.fsM.deleteDoc(sub('wishlist', x.id)))));
     A.saveWish = w(item => fb.fsM.setDoc(sub('wishlist', item.id), clean(item)));
     A.deleteWish = w(id => fb.fsM.deleteDoc(sub('wishlist', id)));
     A.setInterests = w(arr => fb.fsM.setDoc(userDoc(), { interests: arr }, { merge: true }));
@@ -438,8 +442,9 @@
 
     // ---------- notifications ----------
     const inFlight = new Set();
+    let allNotifs = [];
     A.notify = w(async (id, n) => {
-        if (inFlight.has(id) || A.notifications.some(x => x.id === id)) return false;
+        if (inFlight.has(id) || allNotifs.some(x => x.id === id) || A.notifications.some(x => x.id === id)) return false;
         inFlight.add(id);
         try { await fb.fsM.setDoc(sub('notifications', id), clean({ read: false, createdAt: nowISO(), link: '', ...n })); }
         finally { setTimeout(() => inFlight.delete(id), 3000); }
@@ -448,7 +453,9 @@
     });
     A.markRead = w(id => fb.fsM.setDoc(sub('notifications', id), { read: true }, { merge: true }));
     A.markAllRead = w(() => Promise.all(A.notifications.filter(n => !n.read).map(n => fb.fsM.setDoc(sub('notifications', n.id), { read: true }, { merge: true }))));
-    A.clearNotifications = w(() => Promise.all(A.notifications.map(n => fb.fsM.deleteDoc(sub('notifications', n.id)))));
+    // ลบแจ้งเตือน = ซ่อนไว้ (ระบบจะได้ไม่สร้างแจ้งเตือนเดิมขึ้นมาใหม่)
+    A.deleteNotification = w(id => fb.fsM.setDoc(sub('notifications', id), { hidden: true, read: true }, { merge: true }));
+    A.clearNotifications = w(() => Promise.all(A.notifications.map(n => fb.fsM.setDoc(sub('notifications', n.id), { hidden: true, read: true }, { merge: true }))));
     A.unreadCount = () => A.notifications.filter(n => !n.read).length;
 
     function browserNotify(n) {
@@ -552,6 +559,7 @@
             <div id="notifPanel" class="hidden fixed top-[68px] right-2 left-2 sm:left-auto sm:w-96 z-[60] bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden">
                 <div class="flex items-center justify-between px-5 py-3 border-b-2 border-[#9c8a7e] mx-3">
                     <h3 class="font-bold text-[#9c8a7e] text-lg">การแจ้งเตือน</h3>
+                    <span class="text-xs text-gray-400"><i class="fa-solid fa-hand-point-left mr-1"></i>ปัดซ้ายเพื่อลบ</span>
                 </div>
                 <div id="notifList" class="max-h-[60vh] overflow-y-auto px-3 py-2"></div>
                 <a href="settings.html#notifications" class="block text-center text-xs text-gray-500 py-3 border-t border-gray-100 hover:text-[#9c8a7e]"><i class="fa-solid fa-gear mr-1"></i>ตั้งค่าการแจ้งเตือน</a>
@@ -574,11 +582,52 @@
         btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); toggle(panel.classList.contains('hidden')); });
         bd.addEventListener('click', () => toggle(false));
         document.addEventListener('keydown', e => { if (e.key === 'Escape') toggle(false); });
-        document.getElementById('notifList').addEventListener('click', e => {
-            const item = e.target.closest('[data-nid]'); if (!item) return;
+        const list = document.getElementById('notifList');
+        const OPEN_X = -88;
+        const setX = (el, x, animate) => { el.style.transition = animate ? 'transform .2s ease' : 'none'; el.style.transform = x ? `translateX(${x}px)` : ''; el.dataset.open = x ? '1' : ''; };
+        const closeAll = except => list.querySelectorAll('[data-front][data-open="1"]').forEach(el => { if (el !== except) setX(el, 0, true); });
+        const removeNotif = id => {
+            const row = list.querySelector(`[data-row="${CSS.escape(id)}"]`);
+            if (row) { row.style.transition = 'opacity .2s, max-height .25s'; row.style.maxHeight = row.offsetHeight + 'px'; requestAnimationFrame(() => { row.style.opacity = '0'; row.style.maxHeight = '0px'; }); }
+            setTimeout(() => {
+                A.notifications = A.notifications.filter(n => n.id !== id);
+                renderPanel(); renderBell();
+                A.deleteNotification(id).catch(() => { });
+            }, 230);
+        };
+        // ปัดซ้าย (นิ้ว/เมาส์) เพื่อโชว์ปุ่ม "ลบ" สีแดง, ปัดยาวๆ = ลบเลย
+        let sw = null;
+        list.addEventListener('pointerdown', e => {
+            const el = e.target.closest('[data-front]'); if (!el) return;
+            closeAll(el);
+            sw = { el, x0: e.clientX, y0: e.clientY, base: el.dataset.open ? OPEN_X : 0, x: el.dataset.open ? OPEN_X : 0, axis: null, moved: false };
+        });
+        list.addEventListener('pointermove', e => {
+            if (!sw) return;
+            const dx = e.clientX - sw.x0, dy = e.clientY - sw.y0;
+            if (!sw.axis) { if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; sw.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'; }
+            if (sw.axis !== 'x') return;
+            sw.moved = true;
+            sw.x = Math.min(0, Math.max(-160, sw.base + dx));
+            setX(sw.el, sw.x, false);
+        });
+        const endSwipe = () => {
+            if (!sw) return; const s = sw; sw = null;
+            if (!s.moved) return;
+            s.el.dataset.swiped = '1'; setTimeout(() => { delete s.el.dataset.swiped; }, 80);
+            if (s.x < -130) removeNotif(s.el.dataset.nid);
+            else setX(s.el, s.x < OPEN_X / 2 ? OPEN_X : 0, true);
+        };
+        list.addEventListener('pointerup', endSwipe);
+        list.addEventListener('pointercancel', () => { if (sw) { setX(sw.el, sw.base, true); sw = null; } });
+        list.addEventListener('click', e => {
+            const del = e.target.closest('[data-del-nid]');
+            if (del) { removeNotif(del.dataset.delNid); return; }
+            const item = e.target.closest('[data-front]'); if (!item) return;
+            if (item.dataset.swiped) return;
+            if (item.dataset.open) { setX(item, 0, true); return; }
             const n = A.notifications.find(x => x.id === item.dataset.nid); if (!n) return;
-            const go = () => { if (n.link && !location.pathname.endsWith(n.link)) A.go(n.link); else toggle(false); };
-            go();
+            if (n.link && !location.pathname.endsWith(n.link)) A.go(n.link); else toggle(false);
         });
     }
     function renderBell() {
@@ -597,7 +646,9 @@
         list.innerHTML = all.map(n => {
             const [icon, cls] = ICON[n.type] || ['fa-bell', 'bg-gray-100 text-gray-500'];
             const isNew = !n.read || freshIds.has(n.id);
-            return `<button data-nid="${esc(n.id)}" class="w-full text-left flex gap-3 items-start p-3 rounded-2xl hover:bg-[#fdf3e7] ${isNew ? 'bg-[#fdf3e7]/60' : ''}">
+            return `<div data-row="${esc(n.id)}" class="relative overflow-hidden rounded-2xl mb-1">
+              <button data-del-nid="${esc(n.id)}" class="absolute inset-y-0 right-0 w-[88px] bg-red-500 text-white font-bold text-sm flex flex-col items-center justify-center gap-1" aria-label="ลบแจ้งเตือน"><i class="fa-solid fa-trash-can"></i>ลบ</button>
+              <div data-front data-nid="${esc(n.id)}" role="button" tabindex="0" style="touch-action:pan-y" class="relative z-10 w-full text-left flex gap-3 items-start p-3 rounded-2xl cursor-pointer select-none ${isNew ? 'bg-[#fdf3e7]' : 'bg-white'}">
                 <div class="w-10 h-10 rounded-full shrink-0 flex items-center justify-center ${cls}"><i class="fa-solid ${icon}"></i></div>
                 <div class="flex-1 min-w-0">
                     <p class="text-sm ${isNew ? 'font-bold text-gray-800' : 'font-medium text-gray-600'}">${esc(n.title)}</p>
@@ -605,7 +656,8 @@
                     <p class="text-[10px] text-gray-400 mt-0.5">${ago(n.createdAt)}</p>
                 </div>
                 ${isNew ? '<span class="text-[10px] font-bold text-red-500 mt-1 shrink-0">ใหม่</span>' : ''}
-            </button>`;
+              </div>
+            </div>`;
         }).join('');
     }
 })();

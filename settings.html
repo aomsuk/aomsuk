@@ -7,10 +7,13 @@
     <!-- โหลดไฟล์เวอร์ชันล่าสุดเสมอ (กันมือถือ/iPad ใช้ไฟล์เก่าที่จำไว้) -->
     <script>(function () { var v = ''; try { v = (localStorage.getItem('aomsuk_build') || '').slice(0, 7); } catch (e) { } var q = v ? '?v=' + v : ''; document.write('<script src="firebase-config.js' + q + '"><\/script><script src="app.js' + q + '"><\/script>'); })();</script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400..700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai+Looped:wght@400..700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { font-family: 'Prompt', sans-serif; }
+        html { font-size: 17px; } body, button, input, textarea, select { font-family: 'Google Sans', 'Noto Sans Thai Looped', sans-serif; }
         ::-webkit-scrollbar { display: none; }
         * { scrollbar-width: none; }
         /* สวิตช์เปิด/ปิด */
@@ -133,7 +136,7 @@
         <section class="bg-white rounded-3xl p-5 shadow-sm">
             <h3 class="font-bold text-[#9c8a7e] mb-3"><i class="fa-solid fa-database mr-2"></i>ข้อมูลของฉัน</h3>
             <p class="text-xs text-gray-500 mb-3">ข้อมูลทั้งหมดถูกเก็บไว้ในบัญชีของคุณบน Firebase เข้าสู่ระบบจากเครื่องไหนก็เห็นข้อมูลเดียวกัน</p>
-            <button id="deletePlansBtn" class="w-full text-sm bg-[#f4efe9] text-[#7a6a5f] font-semibold rounded-2xl py-2.5"><i class="fa-solid fa-trash-can mr-1"></i>ลบแผนการออมทั้งหมด</button>
+            <button id="deletePlansBtn" class="w-full text-sm bg-[#f4efe9] text-[#7a6a5f] font-semibold rounded-2xl py-2.5"><i class="fa-solid fa-trash-can mr-1"></i>ลบแผนการออมและเป้าหมายทั้งหมด</button>
         </section>
 
         <!-- บัญชี -->
@@ -313,9 +316,9 @@
 
         // ---------------- ข้อมูล ----------------
         $('deletePlansBtn').addEventListener('click', () => {
-            if (!A.goals.length) return toast('ยังไม่มีแผนการออม');
-            if (confirm(`ลบแผนการออมทั้งหมด ${A.goals.length} แผนใช่ไหม? ประวัติการออมจะหายไปด้วย`))
-                A.deleteAllGoals().then(() => toast('ลบแผนทั้งหมดแล้ว'), err => toast('ลบไม่สำเร็จ: ' + err.message));
+            if (!A.goals.length && !A.wishlist.length) return toast('ยังไม่มีแผนการออมหรือเป้าหมาย');
+            if (confirm(`ลบแผนการออม ${A.goals.length} แผน และเป้าหมาย ${A.wishlist.length} รายการทั้งหมดใช่ไหม? ประวัติการออมจะหายไปด้วย`))
+                Promise.all([A.deleteAllGoals(), A.deleteAllWishes()]).then(() => toast('ลบทั้งหมดแล้ว'), err => toast('ลบไม่สำเร็จ: ' + err.message));
         });
 
         // ---------------- บัญชี ----------------
