@@ -103,14 +103,14 @@
         </section>
 
         <!-- ธีมสี -->
-        <section id="theme" class="bg-white rounded-3xl p-5 shadow-sm scroll-mt-20">
+        <section id="theme" data-collapse class="bg-white rounded-3xl p-5 shadow-sm scroll-mt-20">
             <h3 class="font-bold text-[#9c8a7e] text-lg mb-1"><i class="fa-solid fa-palette mr-2"></i>ธีมสี</h3>
             <p class="text-sm text-gray-500 mb-3">เลือกแล้วเปลี่ยนสีทั้งเว็บทันที และจำไว้ในบัญชี เข้าเครื่องไหนก็เป็นธีมเดียวกัน</p>
             <div id="themeGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
         </section>
 
         <!-- การแจ้งเตือน -->
-        <section id="notifications" class="bg-white rounded-3xl p-5 shadow-sm scroll-mt-20">
+        <section id="notifications" data-collapse class="bg-white rounded-3xl p-5 shadow-sm scroll-mt-20">
             <h3 class="font-bold text-[#9c8a7e] text-lg mb-3"><i class="fa-solid fa-bell mr-2"></i>การแจ้งเตือน</h3>
             <div class="divide-y divide-gray-100" id="notifSettings"></div>
             <div class="flex gap-2 mt-3">
@@ -139,16 +139,17 @@
         </section>
 
         <!-- ข้อมูลของฉัน -->
-        <section class="bg-white rounded-3xl p-5 shadow-sm">
+        <section id="data" data-collapse class="bg-white rounded-3xl p-5 shadow-sm scroll-mt-20">
             <h3 class="font-bold text-[#9c8a7e] text-lg mb-3"><i class="fa-solid fa-database mr-2"></i>ข้อมูลของฉัน</h3>
             <p class="text-sm text-gray-500 mb-3">ข้อมูลทั้งหมดถูกเก็บไว้ในบัญชีของคุณบน Firebase เข้าสู่ระบบจากเครื่องไหนก็เห็นข้อมูลเดียวกัน</p>
             <button id="deletePlansBtn" class="w-full text-base bg-[#f4efe9] text-[#7a6a5f] font-semibold rounded-2xl py-2.5"><i class="fa-solid fa-trash-can mr-1"></i>ลบแผนการออมและเป้าหมายทั้งหมด</button>
         </section>
 
         <!-- บัญชี -->
-        <section class="bg-white rounded-3xl p-5 shadow-sm space-y-3">
+        <section id="account" data-collapse class="bg-white rounded-3xl p-5 shadow-sm scroll-mt-20">
+            <h3 class="font-bold text-[#9c8a7e] text-lg mb-3"><i class="fa-solid fa-user-gear mr-2"></i>บัญชีผู้ใช้</h3>
             <button id="logoutBtn" class="w-full bg-white border-2 border-[#9c8a7e] text-[#9c8a7e] font-semibold py-2.5 rounded-2xl"><i class="fa-solid fa-right-from-bracket mr-1"></i>ออกจากระบบ</button>
-            <button id="deleteAccBtn" class="w-full text-base text-red-500 font-semibold py-2">ลบบัญชีถาวร</button>
+            <button id="deleteAccBtn" class="w-full text-base text-red-500 font-semibold py-2 mt-3">ลบบัญชีถาวร</button>
         </section>
 
         <p class="text-center text-sm text-gray-400">AOMSUK เวอร์ชัน 1.0 · ผู้ช่วยออมเงินส่วนตัว 🐷</p>
@@ -178,6 +179,28 @@
             document.getElementById('backdrop').classList.toggle('hidden');
         }
         const A = AOMSUK, $ = id => document.getElementById(id);
+
+        // ---------------- หัวข้อแบบกดเปิด/ปิด (ธีมสี ลงไป) ----------------
+        function setupCollapse(sec) {
+            const h = sec.querySelector('h3'); if (!h) return;
+            const panel = document.createElement('div');
+            panel.className = 'hidden pt-4';
+            [...sec.children].filter(el => el !== h).forEach(el => panel.appendChild(el));
+            h.className = h.className.replace(/\bmb-\d\b/, '');
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'w-full flex items-center justify-between text-left';
+            btn.setAttribute('aria-expanded', 'false');
+            btn.innerHTML = `<span class="font-bold text-[#9c8a7e] text-lg">${h.innerHTML}</span><i class="fa-solid fa-chevron-right text-gray-400 transition-transform"></i>`;
+            h.replaceWith(btn);
+            sec.appendChild(panel);
+            const set = open => { panel.classList.toggle('hidden', !open); btn.setAttribute('aria-expanded', open); btn.lastElementChild.style.transform = open ? 'rotate(90deg)' : ''; };
+            btn.addEventListener('click', () => set(panel.classList.contains('hidden')));
+            sec._open = () => set(true);
+        }
+        document.querySelectorAll('section[data-collapse]').forEach(setupCollapse);
+        // เปิดหัวข้ออัตโนมัติถ้ามาจากลิงก์ เช่น settings.html#notifications
+        const openFromHash = () => { const sec = location.hash && document.querySelector(location.hash); if (sec && sec._open) sec._open(); if (sec && sec.id === 'security') $('pwToggle').click(); };
         function toast(msg) {
             const t = $('toast'); t.textContent = msg; t.classList.remove('hidden'); t.classList.remove('toast-in'); void t.offsetWidth; t.classList.add('toast-in');
             clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), 2400);
@@ -350,7 +373,9 @@
         });
 
         function renderAll() { renderProfile(); renderThemes(); renderNotifSettings(); }
-        A.onReady(() => { renderAll(); if (location.hash) setTimeout(() => document.querySelector(location.hash)?.scrollIntoView({ behavior: 'smooth' }), 100); });
+        const goHash = () => { if (location.hash) { openFromHash(); setTimeout(() => document.querySelector(location.hash)?.scrollIntoView({ behavior: 'smooth' }), 100); } };
+        A.onReady(() => { renderAll(); goHash(); });
+        window.addEventListener('hashchange', goHash);
         A.onChange(renderProfile);
         A.onChange(renderThemes);
         A.onChange(() => { if (!document.activeElement || !document.activeElement.matches('[data-setting]')) renderNotifSettings(); });

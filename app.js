@@ -523,10 +523,12 @@
         const acc = links.find(a => a.dataset.account || a.textContent.includes('บัญชีของฉัน'));
         if (acc) {
             acc.dataset.account = '1'; acc.href = 'settings.html';
+            // รูปโปรไฟล์ในแถบข้าง: สูงเท่าชื่อ + อีเมล
             const photo = A.photo(), cur = acc.querySelector('i, img');
-            if (cur && (cur.tagName === 'IMG') !== !!photo || (photo && cur && cur.getAttribute('src') !== photo)) {
-                const el = photo ? Object.assign(document.createElement('img'), { src: photo, alt: '', className: 'w-8 h-8 rounded-full object-cover shrink-0' })
-                    : Object.assign(document.createElement('i'), { className: 'fa-solid fa-circle-user text-2xl text-black' });
+            if (cur && ((cur.tagName === 'IMG') !== !!photo || (photo && cur.getAttribute('src') !== photo) || !cur.dataset.big)) {
+                const el = photo ? Object.assign(document.createElement('img'), { src: photo, alt: '', className: 'w-12 h-12 rounded-full object-cover shrink-0 border-2 border-gray-100' })
+                    : Object.assign(document.createElement('i'), { className: 'fa-solid fa-circle-user text-black shrink-0 text-[48px] leading-none' });
+                el.dataset.big = '1';
                 cur.replaceWith(el);
             }
             const span = acc.querySelector('span');
@@ -580,10 +582,13 @@
             <div id="notifPanel" class="hidden fixed top-[68px] right-2 left-2 sm:left-auto sm:w-96 z-[60] bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden">
                 <div class="flex items-center justify-between px-5 py-3 border-b-2 border-[#9c8a7e] mx-3">
                     <h3 class="font-bold text-[#9c8a7e] text-lg">การแจ้งเตือน</h3>
-                    <span class="text-xs text-gray-400"><i class="fa-solid fa-hand-point-left mr-1"></i>ปัดซ้ายเพื่อลบ</span>
+                    <button id="notifClearAll" class="text-sm font-semibold text-red-500 hover:text-red-600 px-2 py-1 rounded-full hover:bg-red-50"><i class="fa-solid fa-trash-can mr-1"></i>ลบทั้งหมด</button>
                 </div>
                 <div id="notifList" class="max-h-[60vh] overflow-y-auto px-3 py-2"></div>
-                <a href="settings.html#notifications" class="block text-center text-xs text-gray-500 py-3 border-t border-gray-100 hover:text-[#9c8a7e]"><i class="fa-solid fa-gear mr-1"></i>ตั้งค่าการแจ้งเตือน</a>
+                <div class="flex items-center justify-between px-5 py-3 border-t border-gray-100 text-xs text-gray-500">
+                    <span><i class="fa-solid fa-hand-point-left mr-1"></i>ปัดซ้ายเพื่อลบทีละอัน</span>
+                    <a href="settings.html#notifications" class="hover:text-[#9c8a7e]"><i class="fa-solid fa-gear mr-1"></i>ตั้งค่าการแจ้งเตือน</a>
+                </div>
             </div>`;
         document.body.append(...wrap.children);
         const panel = document.getElementById('notifPanel'), bd = document.getElementById('notifBackdrop');
@@ -604,6 +609,14 @@
         bd.addEventListener('click', () => toggle(false));
         document.addEventListener('keydown', e => { if (e.key === 'Escape') toggle(false); });
         const list = document.getElementById('notifList');
+        // ลบแจ้งเตือนทั้งหมดในครั้งเดียว
+        document.getElementById('notifClearAll').addEventListener('click', () => {
+            if (!A.notifications.length) return;
+            if (!confirm(`ลบการแจ้งเตือนทั้งหมด ${A.notifications.length} รายการใช่ไหม?`)) return;
+            const ids = A.notifications.map(n => n.id);
+            A.notifications = []; renderPanel(); renderBell();
+            ids.forEach(id => A.deleteNotification(id).catch(() => { }));
+        });
         const OPEN_X = -88;
         const setX = (el, x, animate) => { el.style.transition = animate ? 'transform .2s ease' : 'none'; el.style.transform = x ? `translateX(${x}px)` : ''; el.dataset.open = x ? '1' : ''; };
         const closeAll = except => list.querySelectorAll('[data-front][data-open="1"]').forEach(el => { if (el !== except) setX(el, 0, true); });
@@ -660,6 +673,7 @@
     function renderPanel() {
         const list = document.getElementById('notifList'); if (!list) return;
         const all = A.notifications.slice(0, 50);
+        const ca = document.getElementById('notifClearAll'); if (ca) ca.classList.toggle('invisible', !all.length);
         if (!all.length) {
             list.innerHTML = '<div class="text-center py-10 text-gray-400"><i class="fa-regular fa-bell-slash text-4xl mb-2"></i><p class="text-sm">ยังไม่มีการแจ้งเตือน</p></div>';
             return;

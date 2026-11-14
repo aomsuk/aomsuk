@@ -420,7 +420,7 @@
         const INCOME_KEYS = [['เงินเดือน', 'month'], ['รายได้', 'month'], ['รายรับ', 'month'], ['ค่าจ้าง', 'month'], ['ค่าแรง', 'day'], ['ได้เงิน', 'month'], ['เงินค่าขนม', 'day'], ['ได้ค่าขนม', 'day'], ['ค่าขนม', 'day']];
         const EXPENSE_TYPES = [
             { cat: 'game', label: 'ค่าเติมเกม', key: 'ซื้อของในเกม|เติมเงินในเกม|เติมเงินเกม|เติมเกมส์|เติมเกม|ค่าเกม|เติม\\s*robux|เติมโรบัค|เติมrov|เกม', def: 'month' },
-            { cat: 'food', label: 'ค่ากิน', key: 'กินข้าว|ค่าข้าว|ค่ากิน|ค่าอาหาร|กินอาหาร|ข้าว|กิน', def: 'day' },
+            { cat: 'food', label: 'ค่าอาหาร', key: 'กินข้าว|ค่าข้าว|ค่ากิน|ค่าอาหาร|กินอาหาร|ข้าว|กิน', def: 'day' },
             { cat: 'transport', label: 'ค่าเดินทาง', key: 'ค่ารถไฟฟ้า|ค่ารถเมล์|ค่ารถ|ค่าเดินทาง|ค่าน้ำมัน|ค่าวิน|ค่าbts|เดินทาง', def: 'day' },
             { cat: 'snack', label: 'ค่าขนม', key: 'ซื้อขนม|กินขนม|ขนม', def: 'day' },
             { cat: 'bills', label: 'ค่าที่พัก/ค่าบิล', key: 'ค่าหอ|ค่าห้อง|ค่าเช่า|ค่าน้ำค่าไฟ|ค่าไฟ|ค่าน้ำ|ค่าเน็ต|ค่าโทรศัพท์|ค่าโทร', def: 'month' },
@@ -452,7 +452,7 @@
                     const word = m[1], hasPeriod = !!(m[2] || m[5]);
                     // คำกว้างๆ (กิน/ข้าว/ขนม/เกม/ใช้เงิน) ต้องมีช่วงเวลา เช่น "วันละ" ไม่งั้นอาจเป็นของที่อยากซื้อ
                     if (!hasPeriod && /^(กิน|ข้าว|ขนม|เกม|เดินทาง|ใช้เงิน|ใช้จ่าย)$/.test(word)) continue;
-                    const label = ex.cat === 'food' ? (/ข้าว/.test(word) ? 'ค่าข้าว' : 'ค่ากิน') : ex.cat === 'game' ? 'ค่าเติมเกม' : (/^ค่า/.test(word) ? word : ex.label);
+                    const label = ex.cat === 'food' ? (/ข้าว/.test(word) ? 'ค่าข้าว' : 'ค่าอาหาร') : ex.cat === 'game' ? 'ค่าเติมเกม' : (/^ค่า/.test(word) ? word : ex.label);
                     fin.expenses.push({ cat: ex.cat, label, amount: val(m[3], m[4]), period: periodOf(m[2] || m[5]) || ex.def });
                     blank(m); re.lastIndex = 0;
                 }
@@ -922,8 +922,8 @@
             if (pre.image) formImages[id] = pre.image;
             return `<form data-finform id="${id}" class="space-y-3" novalidate>
                 <p class="font-semibold text-[#9c8a7e]">${pre.title || 'กรอกข้อมูลคร่าว ๆ ให้หน่อยนะ เดี๋ยวช่วยคิดว่าเก็บวันละเท่าไหร่ถึงไหว'}</p>
-                ${row('รายได้', num('inc', inc && inc.amount, 'เช่น 10000') + sel('incPer', [['month', 'ต่อเดือน'], ['week', 'ต่อสัปดาห์'], ['day', 'ต่อวัน']], (inc && inc.period) || 'month'))}
-                ${row('ค่ากิน', num('food', food && food.amount, 'เช่น 40') + sel('foodPer', PERS, (food && food.period) || 'day'))}
+                ${row('รายได้/เงินเดือน', num('inc', inc && inc.amount, 'เช่น 10000') + sel('incPer', [['month', 'ต่อเดือน'], ['week', 'ต่อสัปดาห์'], ['day', 'ต่อวัน']], (inc && inc.period) || 'month'))}
+                ${row('ค่าอาหาร', num('food', food && food.amount, 'เช่น 40') + sel('foodPer', PERS, (food && food.period) || 'day'))}
                 ${row('ค่าเดินทาง', num('travel', travel && travel.amount, 'ไม่มีเว้นว่าง') + sel('travelPer', PERS, (travel && travel.period) || 'day'))}
                 ${row('ค่าใช้จ่ายอื่น ๆ', num('other', other && other.amount, 'ไม่มีเว้นว่าง') + sel('otherPer', PERS, (other && other.period) || 'day'))}
                 <div class="border-t-2 border-dashed border-[#e6d8c6] pt-3 space-y-3">
@@ -992,7 +992,7 @@
 
             // สร้างข้อมูลการเงินใหม่ทั้งชุด (แทนของเดิม)
             const expenses = [];
-            if (n('food')) expenses.push({ cat: 'food', label: 'ค่ากิน', amount: n('food'), period: g('foodPer') || 'day' });
+            if (n('food')) expenses.push({ cat: 'food', label: 'ค่าอาหาร', amount: n('food'), period: g('foodPer') || 'day' });
             if (n('travel')) expenses.push({ cat: 'transport', label: 'ค่าเดินทาง', amount: n('travel'), period: g('travelPer') || 'day' });
             if (n('other')) expenses.push({ cat: 'other', label: 'ค่าใช้จ่ายอื่น', amount: n('other'), period: g('otherPer') || 'day' });
             const per = g('incPer') || 'month';
@@ -1002,7 +1002,7 @@
 
             // ข้อความสรุปฝั่งผู้ใช้
             const parts = [];
-            if (n('inc')) parts.push(`รายได้ ${baht(n('inc'))} บาท/${PERIOD_WORD[per]}`);
+            if (n('inc')) parts.push(`รายได้/เงินเดือน ${baht(n('inc'))} บาท/${PERIOD_WORD[per]}`);
             expenses.forEach(x => parts.push(`${x.label} ${baht(x.amount)}/${PERIOD_WORD[x.period]}`));
             const item = g('item'), unitWord = { day: 'วัน', week: 'สัปดาห์', month: 'เดือน' }[g('durU')] || 'วัน';
             pendingImage = formImages[form.id] || null; pendingItem = item;
