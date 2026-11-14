@@ -96,6 +96,27 @@
         if (nh !== href) { e.preventDefault(); location.href = nh; }
     }, true);
 
+    // =================================================================
+    // เปิดแอปเข้ามาใหม่ = เริ่มที่หน้าติดตามเสมอ
+    //   ถ้าไม่ได้ใช้งานเกิน 30 นาที (หรือเพิ่งเปิดครั้งแรก) แล้วเปิดเจอหน้าอื่น
+    //   จะพาไปหน้าติดตาม ยกเว้นเปิดจากลิงก์ที่ตั้งใจ เช่น ?q= ?goal= ?edit= หรือ #...
+    // =================================================================
+    (function startAtDashboard() {
+        if (PUBLIC) return;
+        const KEY = 'aomsuk_last_active', GAP = 30 * 60 * 1000;
+        const last = () => { try { return +localStorage.getItem(KEY) || 0; } catch (x) { return Date.now(); } };
+        const touch = () => { try { localStorage.setItem(KEY, Date.now()); } catch (x) { } };
+        const intent = /[?&](q|goal|edit)=/.test(location.search) || !!location.hash;
+        const toDash = () => { touch(); location.replace(withV('dashboard.html')); };
+        if (page !== 'dashboard.html' && !intent && Date.now() - last() > GAP) return toDash();
+        touch();
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && page !== 'dashboard.html' && Date.now() - last() > GAP) return toDash();
+            touch();
+        });
+        ['click', 'keydown', 'touchstart', 'scroll'].forEach(ev => document.addEventListener(ev, touch, { passive: true }));
+    })();
+
     (function checkForUpdate() {
         if (!/\.github\.io$/i.test(location.hostname)) return;
         const owner = location.hostname.split('.')[0];
