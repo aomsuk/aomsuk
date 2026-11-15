@@ -26,16 +26,15 @@
         </h1>
     </div>
     <div class="flex-1 flex flex-col items-center justify-center p-6">
-        <div class="mb-3 z-0"><img src="https://cdn-icons-png.flaticon.com/512/3135/3135679.png" alt="" class="w-28 h-28 opacity-90"></div>
-        <div id="card" class="bg-white w-full max-w-sm rounded-[30px] p-8 shadow-lg z-10 border border-gray-100">
+        <div id="card" class="bg-white w-full max-w-md rounded-[32px] px-7 py-10 sm:p-10 shadow-lg z-10 border border-gray-100">
             <h2 class="text-center font-bold text-[#9c8a7e] text-lg mb-1">สมัครสมาชิก</h2>
             <p class="text-center text-xs text-gray-500 mb-5">เริ่มต้นออมเงินไปกับ AOMSUK 🐷</p>
-            <form id="regForm" class="space-y-4" novalidate>
-                <input id="name" type="text" maxlength="30" autocomplete="nickname" placeholder="ชื่อเล่น" class="w-full px-4 py-3 bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
-                <input id="email" type="email" autocomplete="email" placeholder="อีเมล" class="w-full px-4 py-3 bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
+            <form id="regForm" class="space-y-5" novalidate>
+                <input id="name" type="text" maxlength="30" autocomplete="nickname" placeholder="ชื่อเล่น" class="w-full px-5 py-4 text-lg bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
+                <input id="email" type="email" autocomplete="email" placeholder="อีเมล" class="w-full px-5 py-4 text-lg bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
                 <div>
                     <div class="relative">
-                        <input id="password" type="password" autocomplete="new-password" placeholder="รหัสผ่าน (อย่างน้อย 8 ตัว)" class="w-full px-4 py-3 pr-12 bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
+                        <input id="password" type="password" autocomplete="new-password" placeholder="รหัสผ่าน (8 ตัวขึ้นไป)" class="w-full px-5 py-4 pr-12 text-lg bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
                         <button type="button" data-toggle="password" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#9c8a7e] w-8 h-8" aria-label="แสดงรหัสผ่าน"><i class="fa-solid fa-eye"></i></button>
                     </div>
                     <div class="flex gap-1 mt-2 px-1">
@@ -47,11 +46,11 @@
                     <p id="strengthText" class="text-[11px] text-gray-400 mt-1 px-1">ใช้ตัวอักษร ตัวเลข และสัญลักษณ์ผสมกันจะปลอดภัยกว่า</p>
                 </div>
                 <div class="relative">
-                    <input id="confirm" type="password" autocomplete="new-password" placeholder="ยืนยันรหัสผ่าน" class="w-full px-4 py-3 pr-12 bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
+                    <input id="confirm" type="password" autocomplete="new-password" placeholder="ยืนยันรหัสผ่าน" class="w-full px-5 py-4 pr-12 text-lg bg-[#fdf3e7] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#9c8a7e] text-gray-700">
                     <span id="matchIcon" class="absolute right-4 top-1/2 -translate-y-1/2 text-sm"></span>
                 </div>
                 <p id="error" class="hidden text-sm text-red-500 text-center -mt-1"></p>
-                <button id="submitBtn" type="submit" class="w-full bg-[#9c8a7e] text-white font-semibold py-3 rounded-2xl shadow-md hover:bg-opacity-90 disabled:opacity-60">สมัครสมาชิก</button>
+                <button id="submitBtn" type="submit" class="w-full bg-[#9c8a7e] text-white font-semibold text-lg py-4 rounded-2xl shadow-md hover:bg-opacity-90 disabled:opacity-60">สมัครสมาชิก</button>
                 <div class="text-center mt-2">
                     <span class="text-gray-400 text-sm">มีบัญชีอยู่แล้ว?</span>
                     <a href="login.html" class="text-gray-600 font-medium hover:text-[#9c8a7e]">เข้าสู่ระบบ</a>
